@@ -1,4 +1,5 @@
-const CACHE_NAME = 'home-menu-v3';
+const CACHE_NAME = 'home-menu-v4';
+const APP_VERSION = 'v4.0';
 const ASSETS = [
   './',
   './index.html',
@@ -28,6 +29,16 @@ self.addEventListener('activate', event => {
       );
     }).then(() => self.clients.claim())
   );
+});
+
+/* 前端「检查更新」点击后发来 SKIP_WAITING 消息，立即接管 */
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+  if (event.data && event.data.type === 'GET_VERSION') {
+    event.source.postMessage({ type: 'VERSION', version: APP_VERSION });
+  }
 });
 
 self.addEventListener('fetch', event => {
