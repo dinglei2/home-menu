@@ -1,4 +1,4 @@
-const CACHE_NAME = 'home-menu-v2';
+const CACHE_NAME = 'home-menu-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -34,8 +34,8 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // API 请求：永远走网络，不缓存（保证订单实时同步）
-  if (url.pathname.startsWith('/api/')) {
+  // Upstash Redis 请求：永远走网络，不缓存
+  if (url.hostname.endsWith('.upstash.io')) {
     event.respondWith(fetch(request));
     return;
   }
