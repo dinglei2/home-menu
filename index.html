@@ -683,17 +683,18 @@
       <h3>☁️ 云端同步设置<button class="close-x" onclick="hideModal('syncMask')">✕</button></h3>
       <div style="font-size:12px;color:#9B8B7A;line-height:1.7;margin-bottom:12px;padding:10px;background:#FFF8EE;border-radius:10px">
         <b>什么是云端同步？</b><br>
-        客户点菜后，订单自动同步到云端服务器，店家实时收到通知。<br>
+        客户点菜后，订单自动同步到云端，店家实时收到通知。<br>
         电脑关机也能用，任何网络都能同步。<br><br>
-        <b>如何获取同步地址？</b><br>
-        1. 店家访问 <a href="https://render.com" target="_blank" style="color:#E8635A">render.com</a> 注册免费账号<br>
-        2. 部署后端服务（详见部署说明）<br>
-        3. 获得形如 <code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:11px">https://xxx.onrender.com</code> 的地址<br>
-        4. 将地址填入下方，所有设备填同样的地址
+        <b>已内置 Upstash Redis 云数据库，无需额外配置。</b><br>
+        如需更换自己的 Upstash 凭据，可在下方修改。
       </div>
       <div class="form-row">
-        <label>云端同步服务器地址</label>
-        <input id="syncUrlInput" type="url" placeholder="https://your-app.onrender.com" style="font-size:13px">
+        <label>Upstash Redis REST URL</label>
+        <input id="syncUrlInput" type="url" placeholder="https://xxx.upstash.io" style="font-size:13px">
+      </div>
+      <div class="form-row">
+        <label>Upstash Redis REST Token</label>
+        <input id="syncTokenInput" type="password" placeholder="Bearer token" style="font-size:13px">
       </div>
       <div id="syncTestResult" style="font-size:12px;margin:8px 0;min-height:20px"></div>
       <div class="btn-row">
@@ -855,66 +856,71 @@ function saveHist(){
   catch(e){ showToast('⚠️ 历史记录太多存不下了，可删除一些旧记录'); }
 }
 
-/* ================= 云端同步 ================= */
-/* API_BASE 动态检测：
-   - 本地 (localhost/LAN IP) → http://[hostname]:8088
-   - 云端部署 → 用户配置的 Render 服务器地址（存 localStorage）
-*/
-function getApiBase(){
-  const h = location.hostname;
-  /* 本地或局域网 → 用同源 + 端口 8088 */
-  if(h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0'){
-    return 'http://localhost:8088';
-  }
-  if(/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h)){
-    return 'http://' + h + ':8088';
-  }
-  /* 云端部署 → 读取用户配置的同步服务器地址 */
-  const saved = localStorage.getItem('homeMenuSyncUrl') || '';
-  return saved;
-}
-let API_BASE = getApiBase();
+/* ================= 云端同步（直连 Upstash Redis，无需后端） ================= */
+const UPSTASH_DEFAULT_URL = 'https://striking-glowworm-130041.upstash.io';
+const UPSTASH_DEFAULT_TOKEN = 'gQAAAAAAAfv5AAIgcDJiNmNkYTk2YmU2YTc0YWFhOWM4YjY3OGM1MThjNjExZQ';
+const REDIS_KEY_MENU = 'homeMenu:menu';
+const REDIS_KEY_ORDERS = 'homeMenu:orders';
+
+function getUpstashUrl(){ return localStorage.getItem('homeMenuUpstashUrl') || UPSTASH_DEFAULT_URL; }
+function getUpstashToken(){ return localStorage.getItem('homeMenuUpstashToken') || UPSTASH_DEFAULT_TOKEN; }
+
 let syncEnabled = false;
 let lastOrderUpdate = 0;
 let lastMenuUpdate = 0;
 let lastSyncCount = 0;
 
-/* 初始化同步：尝试连接服务器，拉取共享数据 */
+/* Upstash Redis REST API 调用 */
+async function redisCmd(...args){
+  const r = await fetch(getUpstashUrl(), {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + getUpstashToken(),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(args)
+  });
+  if(!r.ok) throw new Error('Redis HTTP ' + r.status);
+  const data = await r.json();
+  return data.result;
+}
+
+/* 初始化同步：连接 Upstash Redis，拉取共享数据 */
 async function syncInit(){
-  if(!API_BASE){
-    console.log('☁️ 未配置同步服务器（本地模式）');
-    return;
-  }
   try{
-    const r = await fetch(API_BASE + '/api/state', { method:'GET' });
-    if(!r.ok) throw new Error('server error');
-    const data = await r.json();
+    const results = await redisCmd('MGET', REDIS_KEY_MENU, REDIS_KEY_ORDERS);
     syncEnabled = true;
+    const menuData = results[0] ? JSON.parse(results[0]) : null;
+    const ordersData = results[1] ? JSON.parse(results[1]) : null;
+
     /* 服务器有更新的菜单 → 用服务器的（客户也能看到店家最新菜单） */
     const localMenuTs = parseInt(localStorage.getItem('homeMenuLastMenuSync')) || 0;
-    if(data.menu && data.lastMenuUpdate > localMenuTs){
-      DB = data.menu; saveData();
-      localStorage.setItem('homeMenuLastMenuSync', data.lastMenuUpdate);
+    if(menuData && menuData.lastMenuUpdate > localMenuTs){
+      DB = menuData.menu; saveData();
+      localStorage.setItem('homeMenuLastMenuSync', menuData.lastMenuUpdate);
       renderHeader(); renderSidebar(); renderContent();
-      lastMenuUpdate = data.lastMenuUpdate;
+      lastMenuUpdate = menuData.lastMenuUpdate;
     }
+
     /* 合并服务器上的订单到本地 */
-    if(data.orders && data.orders.length){
-      mergeServerOrders(data.orders);
-      lastOrderUpdate = data.lastOrderUpdate || 0;
-      lastSyncCount = data.orders.length;
+    if(ordersData && ordersData.orders && ordersData.orders.length){
+      mergeServerOrders(ordersData.orders);
+      lastOrderUpdate = ordersData.lastOrderUpdate || 0;
+      lastSyncCount = ordersData.orders.length;
       renderOrder();
       if(orderTab === 'history') renderHistory();
     }
-    /* 店家：把本地菜单推上去（首次同步） */
-    if(isShop() && (!data.menu || data.lastMenuUpdate < localMenuTs)){
+
+    /* 店家：首次同步时把本地菜单推上去 */
+    if(isShop() && (!menuData || (menuData.lastMenuUpdate || 0) < localMenuTs)){
       syncPushMenu();
     }
-    /* 启动轮询 */
+
+    /* 启动轮询（每5秒拉取新订单+菜单更新） */
     setInterval(syncPoll, 5000);
-    console.log('☁️ 云端同步已启用');
+    console.log('☁️ 云端同步已启用（Upstash Redis 直连）');
   }catch(e){
-    console.log('☁️ 云端同步未启用（本地模式）');
+    console.log('☁️ 云端同步未启用：', e.message);
   }
 }
 
@@ -922,32 +928,33 @@ async function syncInit(){
 async function syncPoll(){
   if(!syncEnabled) return;
   try{
-    const r = await fetch(API_BASE + '/api/orders');
-    if(!r.ok) return;
-    const data = await r.json();
+    const results = await redisCmd('MGET', REDIS_KEY_MENU, REDIS_KEY_ORDERS);
+    const menuData = results[0] ? JSON.parse(results[0]) : null;
+    const ordersData = results[1] ? JSON.parse(results[1]) : null;
+
     /* 有新订单 → 合并到本地 */
-    if(data.lastOrderUpdate > lastOrderUpdate){
+    const serverOrderTs = ordersData ? (ordersData.lastOrderUpdate || 0) : 0;
+    if(serverOrderTs > lastOrderUpdate){
       const oldCount = lastSyncCount;
-      mergeServerOrders(data.orders);
-      lastOrderUpdate = data.lastOrderUpdate;
-      lastSyncCount = data.orders.length;
+      if(ordersData && ordersData.orders){
+        mergeServerOrders(ordersData.orders);
+      }
+      lastOrderUpdate = serverOrderTs;
+      lastSyncCount = ordersData ? ordersData.orders.length : 0;
       renderOrder();
       if(orderTab === 'history') renderHistory();
       /* 有新订单时提示店家 */
-      if(isShop() && data.orders.length > oldCount){
+      if(isShop() && lastSyncCount > oldCount){
         showToast('🔔 收到新的点菜订单！');
       }
     }
+
     /* 菜单有更新 → 客户拉取最新菜单 */
-    if(data.lastMenuUpdate && data.lastMenuUpdate > lastMenuUpdate && !isShop()){
-      const sr = await fetch(API_BASE + '/api/state');
-      const sdata = await sr.json();
-      if(sdata.menu){
-        DB = sdata.menu; saveData();
-        lastMenuUpdate = data.lastMenuUpdate;
-        localStorage.setItem('homeMenuLastMenuSync', data.lastMenuUpdate);
-        renderHeader(); renderSidebar(); renderContent();
-      }
+    if(menuData && menuData.lastMenuUpdate > lastMenuUpdate && !isShop()){
+      DB = menuData.menu; saveData();
+      lastMenuUpdate = menuData.lastMenuUpdate;
+      localStorage.setItem('homeMenuLastMenuSync', menuData.lastMenuUpdate);
+      renderHeader(); renderSidebar(); renderContent();
     }
   }catch(e){}
 }
@@ -958,7 +965,6 @@ function mergeServerOrders(serverOrders){
   let added = false;
   serverOrders.forEach(o=>{
     if(!localIds.has(o.id)){
-      /* 兼容旧记录 */
       if(!o.items) o.items = [];
       if(!o.count) o.count = o.items.reduce((a,i)=>a+(i.qty||1),0);
       HIST.push(o);
@@ -968,68 +974,75 @@ function mergeServerOrders(serverOrders){
   if(added) saveHist();
 }
 
-/* 推送订单到服务器 */
+/* 推送订单到云端（读-改-写） */
 async function syncPushOrder(order){
   if(!syncEnabled) return;
   try{
-    await fetch(API_BASE + '/api/order', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ order })
-    });
-  }catch(e){}
+    const result = await redisCmd('GET', REDIS_KEY_ORDERS);
+    const data = result ? JSON.parse(result) : { orders: [], lastOrderUpdate: 0 };
+    if(!data.orders.find(o => o.id === order.id)){
+      data.orders.push(order);
+    }
+    data.lastOrderUpdate = Date.now();
+    await redisCmd('SET', REDIS_KEY_ORDERS, JSON.stringify(data));
+    lastOrderUpdate = data.lastOrderUpdate;
+    lastSyncCount = data.orders.length;
+  }catch(e){ console.log('syncPushOrder error:', e.message); }
 }
 
-/* 推送菜单到服务器（店家专用） */
+/* 推送菜单到云端（店家专用） */
 async function syncPushMenu(){
   if(!syncEnabled || !isShop()) return;
   try{
-    const r = await fetch(API_BASE + '/api/menu', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ menu: DB })
-    });
-    const data = await r.json();
-    if(data.lastMenuUpdate){
-      lastMenuUpdate = data.lastMenuUpdate;
-      localStorage.setItem('homeMenuLastMenuSync', data.lastMenuUpdate);
-    }
-  }catch(e){}
+    const ts = Date.now();
+    const data = { menu: DB, lastMenuUpdate: ts };
+    await redisCmd('SET', REDIS_KEY_MENU, JSON.stringify(data));
+    lastMenuUpdate = ts;
+    localStorage.setItem('homeMenuLastMenuSync', ts);
+  }catch(e){ console.log('syncPushMenu error:', e.message); }
 }
 
-/* 从服务器删除订单 */
+/* 从云端删除订单 */
 async function syncDeleteOrder(id){
   if(!syncEnabled) return;
   try{
-    await fetch(API_BASE + '/api/orders/delete', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ id })
-    });
+    const result = await redisCmd('GET', REDIS_KEY_ORDERS);
+    const data = result ? JSON.parse(result) : { orders: [], lastOrderUpdate: 0 };
+    data.orders = data.orders.filter(o => o.id !== id);
+    data.lastOrderUpdate = Date.now();
+    await redisCmd('SET', REDIS_KEY_ORDERS, JSON.stringify(data));
+    lastOrderUpdate = data.lastOrderUpdate;
+    lastSyncCount = data.orders.length;
   }catch(e){}
 }
 
-/* 从服务器按日期删除订单 */
+/* 从云端按日期删除订单 */
 async function syncDeleteOrderByDate(date){
   if(!syncEnabled) return;
   try{
-    await fetch(API_BASE + '/api/orders/deleteByDate', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ date })
-    });
+    const result = await redisCmd('GET', REDIS_KEY_ORDERS);
+    const data = result ? JSON.parse(result) : { orders: [], lastOrderUpdate: 0 };
+    data.orders = data.orders.filter(o => o.date !== date);
+    data.lastOrderUpdate = Date.now();
+    await redisCmd('SET', REDIS_KEY_ORDERS, JSON.stringify(data));
+    lastOrderUpdate = data.lastOrderUpdate;
+    lastSyncCount = data.orders.length;
   }catch(e){}
 }
 
-/* 更新服务器上的订单（编辑存档时用） */
+/* 更新云端上的订单（编辑存档时用） */
 async function syncUpdateOrder(order){
   if(!syncEnabled) return;
   try{
-    await fetch(API_BASE + '/api/orders/update', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ order })
-    });
+    const result = await redisCmd('GET', REDIS_KEY_ORDERS);
+    const data = result ? JSON.parse(result) : { orders: [], lastOrderUpdate: 0 };
+    const idx = data.orders.findIndex(o => o.id === order.id);
+    if(idx >= 0){ data.orders[idx] = order; }
+    else { data.orders.push(order); }
+    data.lastOrderUpdate = Date.now();
+    await redisCmd('SET', REDIS_KEY_ORDERS, JSON.stringify(data));
+    lastOrderUpdate = data.lastOrderUpdate;
+    lastSyncCount = data.orders.length;
   }catch(e){}
 }
 
@@ -1604,34 +1617,41 @@ function editProfile(){
 
 /* ================= 同步设置 ================= */
 function openSyncSettings(){
-  const input = $('syncUrlInput');
-  if(!input) return;
-  /* 如果是本地访问，显示当前本地地址提示 */
-  const h = location.hostname;
-  const isLocal = (h === 'localhost' || h === '127.0.0.1' || /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h));
-  input.value = localStorage.getItem('homeMenuSyncUrl') || '';
-  $('syncTestResult').innerHTML = isLocal
-    ? '<span style="color:#5FBF70">✅ 本地访问，已自动连接本地服务器</span>'
-    : (API_BASE ? '<span style="color:#5FBF70">当前同步地址：' + esc(API_BASE) + '</span>' : '<span style="color:#C7A98D">未配置同步地址，当前为本地模式</span>');
+  const urlInput = $('syncUrlInput');
+  const tokenInput = $('syncTokenInput');
+  if(!urlInput) return;
+  urlInput.value = getUpstashUrl();
+  tokenInput.value = getUpstashToken();
+  $('syncTestResult').innerHTML = syncEnabled
+    ? '<span style="color:#5FBF70">✅ 云端同步已连接（Upstash Redis）</span>'
+    : '<span style="color:#C7A98D">点击「测试连接」检查是否可连通</span>';
   showModal('syncMask');
 }
 
 async function testSyncUrl(){
-  const url = ($('syncUrlInput').value || '').trim().replace(/\/+$/,'');
+  const url = ($('syncUrlInput').value || '').trim();
+  const token = ($('syncTokenInput').value || '').trim();
   const result = $('syncTestResult');
-  if(!url){
-    result.innerHTML = '<span style="color:#D9534F">❌ 请输入服务器地址</span>';
+  if(!url || !token){
+    result.innerHTML = '<span style="color:#D9534F">❌ 请填写 URL 和 Token</span>';
     return;
   }
   result.innerHTML = '<span style="color:#C7A98D">⏳ 正在测试连接...</span>';
   try{
-    const r = await fetch(url + '/api/health', { method:'GET' });
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(['PING'])
+    });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const data = await r.json();
-    if(data.ok){
-      result.innerHTML = '<span style="color:#5FBF70">✅ 连接成功！服务器正常（' + data.orders + ' 条订单）</span>';
+    if(data.result === 'PONG'){
+      result.innerHTML = '<span style="color:#5FBF70">✅ 连接成功！Upstash Redis 正常运行</span>';
     }else{
-      throw new Error('响应异常');
+      throw new Error('响应异常: ' + JSON.stringify(data));
     }
   }catch(e){
     result.innerHTML = '<span style="color:#D9534F">❌ 连接失败：' + esc(e.message) + '</span>';
@@ -1639,20 +1659,19 @@ async function testSyncUrl(){
 }
 
 function saveSyncUrl(){
-  const url = ($('syncUrlInput').value || '').trim().replace(/\/+$/,'');
-  if(url && !url.startsWith('http://') && !url.startsWith('https://')){
-    showToast('地址需以 http:// 或 https:// 开头');
+  const url = ($('syncUrlInput').value || '').trim();
+  const token = ($('syncTokenInput').value || '').trim();
+  if(!url || !token){
+    showToast('请填写 URL 和 Token');
     return;
   }
-  localStorage.setItem('homeMenuSyncUrl', url);
-  API_BASE = url || getApiBase();
+  localStorage.setItem('homeMenuUpstashUrl', url);
+  localStorage.setItem('homeMenuUpstashToken', token);
   hideModal('syncMask');
-  showToast(url ? '☁️ 同步地址已保存，正在重新连接...' : '已清除同步地址，切换为本地模式');
+  showToast('☁️ 同步凭据已保存，正在重新连接...');
   /* 重新初始化同步 */
   syncEnabled = false;
-  if(url){
-    syncInit();
-  }
+  syncInit();
   renderProfile();
 }
 function renderProfile(){
@@ -1724,7 +1743,7 @@ function renderProfile(){
       ${actions}
       <div class="profile-btn" onclick="openSyncSettings()">
         <span class="pb-icon">☁️</span><span>同步设置</span>
-        <span class="pb-desc">${syncEnabled?'已连接云端':'配置云端同步地址'}</span>
+        <span class="pb-desc">${syncEnabled?'已连接 Upstash Redis':'配置云端同步'}</span>
       </div>
       <div class="profile-btn danger" onclick="logout()">
         <span class="pb-icon">🚪</span><span>退出登录</span>
