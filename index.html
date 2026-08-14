@@ -1,0 +1,2082 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#FF7E5F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="家常小厨房">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="可爱卡通风格的家用菜单小程序，左侧分类导航，右侧展示菜品，支持辣度标识、下单、历史记录和店家编辑。">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" type="image/png" href="./favicon.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<title>🏠 家常小厨房 · 点菜啦</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; }
+  body {
+    font-family: "PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif;
+    background:#FFF7EC;
+    display:flex; justify-content:center;
+    overflow:hidden;
+  }
+  .phone {
+    width:100%; max-width:420px; height:100vh; max-height:100vh;
+    background:#FFF7EC;
+    background-size:cover; background-position:center; background-repeat:no-repeat;
+    display:flex; flex-direction:column;
+    position:relative; overflow:hidden;
+    box-shadow:0 0 30px rgba(0,0,0,.08);
+  }
+  .phone.has-bg .bg-mask{
+    content:""; position:absolute; inset:0;
+    background:rgba(255,247,236,.82); pointer-events:none; z-index:0;
+  }
+
+  /* ---------- 顶部 ---------- */
+  .header {
+    flex:0 0 auto;
+    background:linear-gradient(135deg,#FFB6C1 0%,#FFD89B 60%,#FFECCC 100%);
+    background-size:cover; background-position:center;
+    padding:14px 16px 12px;
+    border-radius:0 0 24px 24px;
+    position:relative; z-index:5;
+    box-shadow:0 4px 12px rgba(255,150,150,.25);
+    cursor:default;
+  }
+  .header h1 {
+    font-size:20px; color:#8A4B2D; letter-spacing:1px;
+    display:flex; align-items:center; gap:8px;
+  }
+  .header h1 .logo {
+    background:#fff; border-radius:50%; width:34px; height:34px;
+    display:flex; align-items:center; justify-content:center; font-size:20px;
+    box-shadow:0 3px 0 #F3C9A0; flex:0 0 auto;
+  }
+  .header .sub { font-size:12px; color:#B0714F; margin-top:4px; margin-left:42px; }
+  .header .cart-brief {
+    position:absolute; right:14px; top:14px;
+    background:#fff; border-radius:999px; padding:6px 12px;
+    font-size:12px; color:#E8635A; font-weight:bold;
+    box-shadow:0 3px 0 #F3C9A0; cursor:pointer;
+  }
+  .cart-brief .badge {
+    background:#FF6B6B; color:#fff; border-radius:999px;
+    padding:1px 7px; font-size:11px; margin-left:4px;
+    display:inline-block; min-width:18px; text-align:center;
+  }
+  .edit-hint {
+    display:none; font-size:10px; color:#fff; background:#FF8C42;
+    border-radius:999px; padding:2px 8px; margin-left:8px; cursor:pointer;
+  }
+  body.editing .edit-hint{ display:inline-block; }
+
+  /* ---------- 主体 ---------- */
+  .main { flex:1 1 auto; display:flex; overflow:hidden; position:relative; z-index:1; }
+
+  /* 左侧分类 */
+  .sidebar {
+    flex:0 0 86px; overflow-y:auto;
+    background:#FFF1DE;
+    border-right:2px dashed #FFD9A8;
+    padding-bottom:10px;
+  }
+  .sidebar::-webkit-scrollbar{ display:none; }
+  .cat-item {
+    padding:14px 6px; text-align:center; cursor:pointer;
+    font-size:13px; color:#9A6B4A; position:relative;
+    transition:all .2s; user-select:none;
+  }
+  .cat-item .icon { font-size:20px; display:block; margin-bottom:3px; }
+  .cat-item.active {
+    background:#fff; color:#FF7E5F; font-weight:bold;
+    border-radius:16px; margin:6px 4px; padding:10px 4px;
+    box-shadow:0 3px 8px rgba(255,150,120,.25);
+  }
+  .cat-item.active::before {
+    content:""; position:absolute; left:-4px; top:50%; transform:translateY(-50%);
+    width:5px; height:22px; background:#FF7E5F; border-radius:4px;
+  }
+  .side-divider { border-top:2px dashed #FFD9A8; margin:6px 10px; }
+  .side-tool {
+    padding:10px 6px; text-align:center; cursor:pointer; font-size:12px;
+    color:#C08A5E; user-select:none;
+  }
+  .side-tool .icon{ font-size:18px; display:block; margin-bottom:2px; }
+  .side-tool:active{ opacity:.6; }
+
+  /* 右侧菜品 */
+  .content { flex:1; overflow-y:auto; padding:12px 12px 90px; scroll-behavior:smooth; }
+  .content::-webkit-scrollbar{ width:4px; }
+  .content::-webkit-scrollbar-thumb{ background:#FFD9A8; border-radius:4px; }
+
+  .cat-title {
+    font-size:15px; font-weight:bold; color:#8A4B2D;
+    margin:4px 2px 10px; display:flex; align-items:center; gap:6px;
+  }
+  .cat-title .tag {
+    font-size:10px; font-weight:normal; color:#fff;
+    background:#FFB347; border-radius:999px; padding:2px 8px;
+  }
+
+  .dish-card {
+    background:#fff; border-radius:18px; padding:10px;
+    margin-bottom:12px; display:flex; gap:10px; position:relative;
+    box-shadow:0 4px 10px rgba(230,180,120,.18);
+    border:2px solid #FFEFD8;
+    animation:pop .3s ease both;
+    cursor:pointer;
+  }
+  @keyframes pop { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+
+  .dish-img {
+    flex:0 0 78px; height:78px; border-radius:14px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:42px; position:relative; overflow:hidden;
+    background:#FFEFD8;
+  }
+  .dish-img img { width:100%; height:100%; object-fit:cover; }
+  .dish-img .steam{ position:absolute; top:2px; font-size:12px; opacity:.7; animation:steam 2s infinite; }
+  @keyframes steam { 0%,100%{transform:translateY(0);opacity:.4;} 50%{transform:translateY(-3px);opacity:.8;} }
+
+  .dish-info { flex:1; min-width:0; padding-right:26px; }
+  .dish-name { font-size:15px; font-weight:bold; color:#5B4636; }
+  .dish-desc {
+    font-size:11px; color:#A98B72; margin-top:3px; line-height:1.5;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  .dish-meta { margin-top:5px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .price { font-size:14px; color:#FF6B6B; font-weight:bold; }
+  .spicy { font-size:11px; letter-spacing:1px; }
+  .has-detail{ position:absolute; left:88px; bottom:10px; font-size:10px; color:#C7A98D; }
+
+  .tag-mini { font-size:9px; color:#fff; background:#9BC53D; border-radius:999px; padding:1px 6px; }
+  .tag-mini.hot{ background:#FF8C42; }
+  .tag-mini.new{ background:#5EB1BF; }
+
+  .add-btn {
+    position:absolute; right:10px; bottom:10px;
+    width:26px; height:26px; border-radius:50%;
+    background:#FF7E5F; color:#fff; font-size:18px; font-weight:bold;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 3px 0 #E85A3A; cursor:pointer; border:none;
+    transition:transform .15s; font-family:inherit; z-index:2;
+  }
+  .add-btn:active { transform:scale(.85); }
+
+  .edit-btns { position:absolute; top:6px; right:8px; display:none; gap:5px; z-index:2; }
+  body.editing .edit-btns{ display:flex; }
+  body.editing .add-btn{ display:none; }
+  body.editing .qty-box.show{ display:none; }
+  .mini-btn {
+    width:24px; height:24px; border-radius:8px; border:none; cursor:pointer;
+    font-size:13px; display:flex; align-items:center; justify-content:center;
+    font-family:inherit; box-shadow:0 2px 0 rgba(0,0,0,.08);
+  }
+  .mini-btn:active{ transform:scale(.88); }
+  .mb-edit{ background:#FFE3C2; }
+  .mb-del{ background:#FFD3CC; }
+
+  .qty-box { position:absolute; right:8px; bottom:8px; display:none; align-items:center; gap:7px; }
+  .qty-box.show{ display:flex; }
+  .qty-btn {
+    width:24px; height:24px; border-radius:50%; border:none;
+    font-size:15px; font-weight:bold; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    font-family:inherit; transition:transform .15s;
+  }
+  .qty-btn:active{ transform:scale(.85); }
+  .qty-minus { background:#fff; color:#FF7E5F; border:2px solid #FFD0C0; box-shadow:0 2px 0 #FFD0C0; }
+  .qty-num { font-size:14px; font-weight:bold; color:#E8635A; min-width:16px; text-align:center; }
+
+  .add-dish-bar {
+    display:none; border:2px dashed #FFC49A; border-radius:16px;
+    padding:12px; text-align:center; color:#E8A06B; font-size:13px;
+    cursor:pointer; background:rgba(255,240,220,.6); margin-bottom:10px;
+  }
+  body.editing .add-dish-bar{ display:block; }
+
+  .empty-cat { text-align:center; color:#C7A98D; font-size:13px; padding:40px 0; }
+
+  /* ---------- 底部导航 ---------- */
+  .tabbar {
+    flex:0 0 auto; position:absolute; left:0; right:0; bottom:0;
+    background:#fff; border-radius:22px 22px 0 0; display:flex; z-index:20;
+    box-shadow:0 -4px 14px rgba(230,170,110,.18);
+    padding:6px 0 max(8px, env(safe-area-inset-bottom));
+  }
+  .tab { flex:1; text-align:center; padding:4px 0; cursor:pointer; color:#B79A80; font-size:11px; user-select:none; }
+  .tab .t-icon { font-size:22px; display:block; margin-bottom:1px; transition:transform .2s; }
+  .tab.active { color:#FF7E5F; font-weight:bold; }
+  .tab.active .t-icon { transform:scale(1.15) translateY(-1px); }
+  .tab .dot {
+    position:absolute; margin-left:26px; margin-top:-38px;
+    background:#FF6B6B; color:#fff; font-size:10px; font-weight:normal;
+    border-radius:999px; padding:1px 6px; min-width:16px; display:none;
+  }
+  .tab .dot.show{ display:inline-block; }
+
+  /* ---------- 订单页 ---------- */
+  .order-view {
+    position:absolute; inset:0; background:#FFF7EC; z-index:15;
+    display:none; flex-direction:column; padding-top:14px;
+  }
+  .order-view.show{ display:flex; }
+  .order-title { font-size:18px; font-weight:bold; color:#8A4B2D; padding:4px 18px 10px; display:flex; align-items:center; gap:8px; }
+  .order-list { flex:1; overflow-y:auto; padding:0 14px 120px; }
+  .order-card {
+    background:#fff; border-radius:16px; padding:10px 12px; margin-bottom:10px;
+    display:flex; align-items:center; gap:10px; border:2px solid #FFEFD8;
+    box-shadow:0 3px 8px rgba(230,180,120,.15); animation:pop .25s ease both;
+  }
+  .o-img{ flex:0 0 52px; height:52px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:28px; background:#FFEFD8; overflow:hidden; }
+  .o-img img{ width:100%; height:100%; object-fit:cover; }
+  .o-info{ flex:1; min-width:0; }
+  .o-name{ font-size:14px; font-weight:bold; color:#5B4636; }
+  .o-price{ font-size:12px; color:#FF6B6B; font-weight:bold; margin-top:2px; }
+  .o-ctrl{ display:flex; align-items:center; gap:6px; }
+  .order-empty { text-align:center; color:#C7A98D; padding:70px 20px; font-size:14px; line-height:2; }
+  .order-empty .big{ font-size:56px; display:block; }
+  .today-head{ display:flex;align-items:center;justify-content:space-between;padding:12px 2px 8px;font-size:13px;font-weight:bold;color:#C97B3D;position:sticky;top:0;background:#FFF6E8;z-index:2; }
+  .order-footer {
+    position:absolute; left:12px; right:12px; bottom:76px;
+    background:linear-gradient(135deg,#FF9A76,#FF7E5F);
+    border-radius:18px; padding:12px 16px; color:#fff;
+    display:flex; align-items:center; justify-content:space-between;
+    box-shadow:0 6px 16px rgba(255,120,90,.35); z-index:18;
+  }
+  .order-total { font-size:15px; font-weight:bold; }
+  .order-total small{ font-size:11px; font-weight:normal; opacity:.9; display:block; }
+  .clear-btn {
+    background:#fff; color:#FF7E5F; border:none; border-radius:999px;
+    padding:8px 16px; font-size:13px; font-weight:bold; cursor:pointer;
+    box-shadow:0 3px 0 rgba(200,80,50,.3); font-family:inherit;
+  }
+  .clear-btn:active{ transform:scale(.94); }
+
+  /* ---------- 弹窗通用 ---------- */
+  .modal-mask {
+    position:absolute; inset:0; background:rgba(90,60,40,.45); z-index:50;
+    display:none; align-items:center; justify-content:center; padding:18px;
+  }
+  .modal-mask.show{ display:flex; }
+  .modal {
+    background:#FFFDF8; border-radius:22px; width:100%; max-width:360px;
+    max-height:86%; overflow-y:auto; padding:18px 16px;
+    box-shadow:0 10px 30px rgba(120,70,30,.3);
+    animation:pop .25s ease both;
+  }
+  .modal h3 { font-size:16px; color:#8A4B2D; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .modal .close-x {
+    margin-left:auto; background:#FFE9D6; color:#B0714F; border:none;
+    width:26px; height:26px; border-radius:50%; cursor:pointer; font-size:14px; font-family:inherit;
+  }
+  .form-row { margin-bottom:10px; }
+  .form-row label { font-size:12px; color:#B0714F; display:block; margin-bottom:4px; font-weight:bold; }
+  .form-row input, .form-row textarea, .form-row select {
+    width:100%; border:2px solid #FFE3C2; border-radius:12px;
+    padding:8px 10px; font-size:13px; font-family:inherit;
+    background:#fff; color:#5B4636; outline:none;
+  }
+  .form-row textarea{ resize:vertical; min-height:56px; line-height:1.6; }
+  .form-row input:focus, .form-row textarea:focus{ border-color:#FFB347; }
+  .btn-row { display:flex; gap:10px; margin-top:14px; }
+  .btn {
+    flex:1; border:none; border-radius:999px; padding:10px 0;
+    font-size:14px; font-weight:bold; cursor:pointer; font-family:inherit;
+    transition:transform .15s;
+  }
+  .btn:active{ transform:scale(.95); }
+  .btn-main{ background:linear-gradient(135deg,#FF9A76,#FF7E5F); color:#fff; box-shadow:0 4px 0 #E85A3A; }
+  .btn-plain{ background:#FFF1DE; color:#B0714F; box-shadow:0 4px 0 #F3D9B0; }
+  .btn-danger{ background:#FFE3DE; color:#E8635A; box-shadow:0 4px 0 #FFC9BE; }
+  .pwd-box { text-align:center; }
+  .pwd-box .lock-big { font-size:46px; display:block; margin-bottom:6px; }
+  .pwd-box p { font-size:12px; color:#B0714F; margin-bottom:12px; }
+  .pwd-input {
+    width:100%; border:2px solid #FFE3C2; border-radius:14px; padding:10px;
+    font-size:18px; text-align:center; letter-spacing:6px; font-family:inherit; outline:none;
+  }
+  .pwd-input:focus{ border-color:#FFB347; }
+  .pwd-err { color:#E8635A; font-size:12px; height:18px; margin-top:6px; }
+
+  /* 菜品详情弹窗 */
+  .detail-img {
+    width:100%; height:150px; border-radius:16px; margin-bottom:10px;
+    display:flex; align-items:center; justify-content:center; font-size:64px;
+    background:linear-gradient(135deg,#FFE0E9,#FFF3D6); overflow:hidden;
+  }
+  .detail-img img{ width:100%; height:100%; object-fit:cover; }
+  .detail-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .detail-name { font-size:17px; font-weight:bold; color:#5B4636; }
+  .detail-desc { font-size:12px; color:#A98B72; line-height:1.7; margin:8px 0 4px; }
+  .detail-sec { margin-top:10px; background:#FFF6E8; border-radius:14px; padding:10px 12px; }
+  .detail-sec .sec-title { font-size:13px; font-weight:bold; color:#C97B3D; margin-bottom:6px; display:flex; gap:5px; align-items:center; }
+  .detail-sec ul { padding-left:2px; list-style:none; }
+  .detail-sec li { font-size:12px; color:#7A6350; line-height:1.9; }
+  .detail-sec ol { padding-left:20px; }
+  .detail-sec ol li { font-size:12px; color:#7A6350; line-height:1.9; }
+  .detail-none { font-size:12px; color:#C7A98D; }
+
+  /* 分类管理 */
+  .cat-manage-item {
+    display:flex; align-items:center; gap:8px; background:#FFF6E8;
+    border-radius:12px; padding:8px 10px; margin-bottom:8px;
+  }
+  .cat-manage-item .cm-name{ flex:1; font-size:14px; color:#5B4636; font-weight:bold; }
+  .cat-manage-item .cm-icon{ font-size:18px; }
+  .cat-manage-item .cm-btn {
+    border:none; background:#fff; border-radius:8px; width:28px; height:28px;
+    cursor:pointer; font-size:13px; font-family:inherit; box-shadow:0 2px 0 #F3D9B0;
+  }
+
+  /* 订单页切换 & 历史记录 */
+  .seg{ display:flex; background:#FFF1DE; border-radius:999px; padding:4px; margin:0 14px 10px; }
+  .seg-item{ flex:1; text-align:center; font-size:13px; padding:7px 0; border-radius:999px; color:#B0714F; cursor:pointer; user-select:none; transition:all .2s; }
+  .seg-item.active{ background:#fff; color:#FF7E5F; font-weight:bold; box-shadow:0 2px 6px rgba(255,150,120,.3); }
+  .order-panel{ display:none; }
+  .order-panel.show{ display:block; }
+  .hist-date{ background:#fff; border:2px solid #FFEFD8; border-radius:16px; margin-bottom:12px; overflow:hidden; box-shadow:0 3px 8px rgba(230,180,120,.15); animation:pop .25s ease both; }
+  .hist-date .hd-head{ display:flex; align-items:center; gap:6px; padding:10px 12px; cursor:pointer; font-size:14px; font-weight:bold; color:#5B4636; }
+  .hist-date .hd-head .cnt{ font-size:10px; color:#fff; background:#FFB347; border-radius:999px; padding:2px 8px; font-weight:normal; }
+  .hist-date .hd-head .arrow{ margin-left:auto; transition:transform .2s; font-size:12px; color:#C7A98D; }
+  .hist-date.open .arrow{ transform:rotate(90deg); }
+  .hist-body{ display:none; border-top:2px dashed #FFEFD8; padding:6px 12px; }
+  .hist-date.open .hist-body{ display:block; }
+  .hist-row{ display:flex; align-items:center; gap:8px; padding:6px 0; font-size:13px; color:#7A6350; }
+  .hist-row .hr-img{ width:34px; height:34px; border-radius:10px; background:#FFEFD8; display:flex; align-items:center; justify-content:center; font-size:19px; overflow:hidden; flex:0 0 34px; }
+  .hist-row .hr-img img{ width:100%; height:100%; object-fit:cover; }
+  .hist-row .hr-name{ flex:1; min-width:0; }
+  .hist-row .hr-qty{ color:#B79A80; font-size:11px; }
+  .hist-row .hr-sub{ color:#E8635A; font-weight:bold; }
+  .hist-total{ display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-top:2px dashed #FFEFD8; font-size:13px; color:#C97B3D; font-weight:bold; }
+  .hist-del{ background:#FFE3DE; color:#E8635A; border:none; border-radius:999px; font-size:11px; padding:4px 10px; cursor:pointer; font-family:inherit; }
+  .hist-del:active{ transform:scale(.92); }
+  .hist-empty { text-align:center; color:#C7A98D; padding:60px 20px; font-size:14px; line-height:2; }
+  .hist-empty .big{ font-size:56px; display:block; }
+
+  /* 上传按钮 */
+  .upload-btn {
+    width:100%; background:#FFF6E8; color:#C08A5E; border:2px dashed #FFC49A;
+    border-radius:12px; padding:9px 10px; font-size:12px; font-weight:bold;
+    cursor:pointer; font-family:inherit; transition:transform .15s;
+  }
+  .upload-btn:active{ transform:scale(.97); }
+
+  /* 确认下单悬浮按钮 */
+  .confirm-bar {
+    position:absolute; left:12px; right:12px; bottom:74px; z-index:19;
+    background:linear-gradient(135deg,#9BD98B,#5FBF70); color:#fff;
+    border-radius:999px; padding:12px; text-align:center;
+    font-size:15px; font-weight:bold; letter-spacing:1px;
+    box-shadow:0 6px 16px rgba(80,180,110,.4); cursor:pointer;
+    display:none; animation:pop .25s ease both;
+    transition:transform .15s; user-select:none;
+  }
+  .confirm-bar.show{ display:block; }
+  .confirm-bar:active{ transform:scale(.97); }
+
+  /* 飞心 / toast */
+  .fly { position:fixed; pointer-events:none; z-index:99; font-size:20px; animation:fly .8s ease forwards; }
+  @keyframes fly {
+    0%{ opacity:1; transform:translate(0,0) scale(1); }
+    100%{ opacity:0; transform:translate(var(--dx),-70px) scale(1.6); }
+  }
+  .toast {
+    position:absolute; left:50%; top:46%; transform:translateX(-50%);
+    background:rgba(90,60,40,.85); color:#fff; font-size:13px;
+    padding:10px 18px; border-radius:999px; z-index:99;
+    opacity:0; pointer-events:none; transition:opacity .25s; white-space:nowrap;
+  }
+  .toast.show{ opacity:1; }
+
+  /* ---------- 我的页 ---------- */
+  .profile-view {
+    position:absolute; inset:0; background:#FFF7EC; z-index:15;
+    display:none; flex-direction:column; overflow-y:auto;
+  }
+  .profile-view.show{ display:flex; }
+  .profile-card {
+    margin:16px 14px; background:#fff; border-radius:20px; padding:24px 20px;
+    text-align:center; border:2px solid #FFEFD8; box-shadow:0 4px 14px rgba(230,180,120,.15);
+  }
+  .avatar-wrap {
+    width:90px; height:90px; border-radius:50%; margin:0 auto 12px;
+    background:linear-gradient(135deg,#FFE8D6,#FFD4B8); display:flex; align-items:center; justify-content:center;
+    font-size:42px; overflow:hidden; position:relative; cursor:pointer; border:3px solid #FFCFA8;
+  }
+  .avatar-wrap img{ width:100%; height:100%; object-fit:cover; }
+  .avatar-wrap .avatar-hint {
+    position:absolute; bottom:0; left:0; right:0; background:rgba(0,0,0,.45);
+    color:#fff; font-size:10px; padding:2px 0; text-align:center;
+  }
+  .profile-name { font-size:18px; font-weight:bold; color:#5C4033; margin-bottom:4px; }
+  .profile-role {
+    display:inline-block; font-size:12px; padding:3px 14px; border-radius:999px; margin-top:4px;
+  }
+  .profile-role.shop{ background:#FFE8D6; color:#C97B3D; }
+  .profile-role.customer{ background:#E8F4FF; color:#3B7Bc9; }
+  .profile-info { font-size:12px; color:#C7A98D; margin-top:8px; }
+  .profile-actions { margin:0 14px 100px; }
+  .profile-btn {
+    background:#fff; border:2px solid #FFEFD8; border-radius:14px; padding:14px 16px;
+    margin-bottom:10px; display:flex; align-items:center; gap:12px; cursor:pointer;
+    font-size:14px; color:#5C4033; font-weight:bold; transition:all .15s;
+  }
+  .profile-btn:active{ transform:scale(.98); }
+  .profile-btn .pb-icon{ font-size:22px; }
+  .profile-btn .pb-desc{ font-size:11px; color:#C7A98D; font-weight:normal; margin-left:auto; }
+  .profile-btn.danger{ color:#D9534F; }
+
+  /* 登录弹窗 */
+  .role-pick { display:flex; gap:12px; margin:10px 0; }
+  .role-card {
+    flex:1; border:3px solid #FFEFD8; border-radius:16px; padding:18px 10px; text-align:center;
+    cursor:pointer; transition:all .2s; background:#FFFBF5;
+  }
+  .role-card.selected{ border-color:#FF7E5F; background:#FFF0E6; }
+  .role-card .rc-icon{ font-size:36px; display:block; margin-bottom:8px; }
+  .role-card .rc-title{ font-size:14px; font-weight:bold; color:#5C4033; }
+  .role-card .rc-desc{ font-size:11px; color:#C7A98D; margin-top:4px; }
+
+  /* ---------- PWA / 移动端安全区域 ---------- */
+  .phone { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  @media (display-mode: standalone) {
+    .header { padding-top: calc(12px + env(safe-area-inset-top)); }
+    body { background:#FFF7EC; }
+  }
+  /* 安装提示条 */
+  .pwa-install-bar {
+    position:fixed; bottom:66px; left:50%; transform:translateX(-50%);
+    max-width: calc(100% - 32px); z-index:600;
+    background:#fff; border-radius:14px; padding:10px 14px;
+    box-shadow:0 6px 20px rgba(0,0,0,.12); display:flex; align-items:center; gap:10px;
+    font-size:13px; color:#5C3A28; animation:pwaBarIn .4s ease both;
+  }
+  .pwa-install-bar.hide{ animation:pwaBarOut .3s ease both; }
+  .pwa-install-bar img{ width:34px; height:34px; border-radius:8px; }
+  .pwa-install-bar .btns{ display:flex; gap:8px; margin-left:4px; }
+  .pwa-install-bar button{ border:none; border-radius:10px; padding:6px 12px; font-size:12px; cursor:pointer; }
+  .pwa-install-bar .install{ background:#FF7E5F; color:#fff; font-weight:bold; }
+  .pwa-install-bar .close{ background:#F5F0E8; color:#9B8B7A; }
+  @keyframes pwaBarIn{ from{ opacity:0; transform:translate(-50%,16px); } to{ opacity:1; transform:translate(-50%,0); } }
+  @keyframes pwaBarOut{ from{ opacity:1; transform:translate(-50%,0); } to{ opacity:0; transform:translate(-50%,16px); } }
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+
+  <!-- 顶部 -->
+  <div class="header" id="header">
+    <h1><span class="logo">🍲</span><span id="hTitle">家常小厨房</span><span class="edit-hint" onclick="openPageSetting()">✏️ 点此改标题/背景</span></h1>
+    <div class="sub" id="hSub">今天想吃点什么呢？🍜</div>
+    <div class="cart-brief" onclick="switchTab('order')">🧺 已点 <span class="badge" id="cartCount">0</span></div>
+  </div>
+
+  <!-- 主体 -->
+  <div class="main">
+    <div class="sidebar" id="sidebar"></div>
+    <div class="content" id="content"></div>
+  </div>
+
+  <!-- 订单页 -->
+  <div class="order-view" id="orderView">
+    <div class="order-title">🧺 我的点菜单</div>
+    <div class="seg">
+      <div class="seg-item active" id="segToday" onclick="switchOrderTab('today')">🧺 今日点菜</div>
+      <div class="seg-item" id="segHistory" onclick="switchOrderTab('history')">📅 历史记录</div>
+    </div>
+    <div class="order-list order-panel show" id="orderList"></div>
+    <div class="order-list order-panel" id="historyList"></div>
+    <div class="order-footer" id="orderFooter" style="display:none">
+      <div class="order-total"><small>一共点了 <b id="orderDishCount">0</b> 道菜</small>🧺 今日菜单已就绪</div>
+      <div style="display:flex;gap:8px">
+        <button class="clear-btn" onclick="clearOrder()">🗑️ 清空</button>
+        <button class="clear-btn" style="background:#FFF3C9;color:#B98A00;box-shadow:0 3px 0 rgba(200,170,60,.4)" onclick="saveOrderRecord()">📝 存档</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 我的页 -->
+  <div class="profile-view" id="profileView">
+    <div id="profileContent"></div>
+  </div>
+
+  <!-- 底部导航 -->
+  <div class="tabbar">
+    <div class="tab active" id="tabKitchen" onclick="switchTab('kitchen')"><span class="t-icon">👨‍🍳</span>厨房</div>
+    <div class="tab" id="tabOrder" onclick="switchTab('order')" style="position:relative"><span class="t-icon">🧺</span>订单<span class="dot" id="tabDot">0</span></div>
+    <div class="tab" id="tabProfile" onclick="switchTab('profile')"><span class="t-icon">🙋</span>我的</div>
+  </div>
+
+  <!-- 确认下单悬浮按钮（厨房页） -->
+  <div class="confirm-bar" id="confirmBar" onclick="confirmOrder()">🧾 确认下单 · 已点 <b id="confirmCnt">0</b> 道</div>
+
+  <!-- 下单分享弹窗 -->
+  <div class="modal-mask" id="shareMask">
+    <div class="modal">
+      <h3>🎉 下单成功！<button class="close-x" onclick="hideModal('shareMask')">✕</button></h3>
+      <div id="shareCard" style="background:#FFF6E8;border-radius:14px;padding:12px 14px;font-size:13px;color:#7A6350;line-height:2;margin-bottom:4px"></div>
+      <p style="font-size:11px;color:#C7A98D;margin-top:6px;text-align:center">把菜单分享给家人，大家照着做／照着点～</p>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="copyShareText()">📋 复制文字</button>
+        <button class="btn btn-main" onclick="shareToOther()">📲 分享给别人</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- 登录/注册弹窗 -->
+  <div class="modal-mask" id="loginMask">
+    <div class="modal">
+      <h3>🙋 登录 / 注册<button class="close-x" onclick="hideModal('loginMask')">✕</button></h3>
+      <p style="font-size:12px;color:#C7A98D;margin-bottom:6px">选择你的身份，开始使用吧～</p>
+      <div class="role-pick">
+        <div class="role-card" id="roleShop" onclick="selectRole('shop')">
+          <span class="rc-icon">🏪</span>
+          <div class="rc-title">我是店家</div>
+          <div class="rc-desc">管理菜单 · 编辑菜品<br>接收点菜通知</div>
+        </div>
+        <div class="role-card" id="roleCustomer" onclick="selectRole('customer')">
+          <span class="rc-icon">🧑</span>
+          <div class="rc-title">我是客户</div>
+          <div class="rc-desc">浏览菜单 · 点菜下单<br>查看历史订单</div>
+        </div>
+      </div>
+      <div class="form-row"><label>昵称</label><input id="loginName" placeholder="给自己起个名字吧～" maxlength="12"></div>
+      <div class="form-row">
+        <label>头像</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div id="loginAvatarPrev" style="width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#FFE8D6,#FFD4B8);display:flex;align-items:center;justify-content:center;font-size:24px;overflow:hidden;flex:0 0 auto;border:2px solid #FFCFA8">🧑</div>
+          <input type="file" accept="image/*" id="loginAvatarFile" style="display:none" onchange="handleAvatarUpload(this,'loginAvatarPrev')">
+          <button class="btn btn-plain" style="flex:1" onclick="document.getElementById('loginAvatarFile').click()">📷 上传头像</button>
+        </div>
+      </div>
+      <div id="loginShopPwd" style="display:none">
+        <div class="form-row"><label>管理密码（店家专享）</label><input type="password" id="loginPwd" placeholder="输入管理密码" maxlength="12"></div>
+        <p style="font-size:11px;color:#C7A98D;margin:-4px 0 8px">💡 店家需要管理密码才能编辑菜品，默认密码：1234</p>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="hideModal('loginMask')">取消</button>
+        <button class="btn btn-main" onclick="doLogin()">✅ 确认登录</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 密码弹窗 -->
+  <div class="modal-mask" id="pwdMask">
+    <div class="modal pwd-box">
+      <span class="lock-big">🔒</span>
+      <h3 style="justify-content:center">进入编辑模式</h3>
+      <p>请输入管理密码解锁编辑功能</p>
+      <input type="password" class="pwd-input" id="pwdInput" maxlength="12" placeholder="••••" onkeydown="if(event.key==='Enter')tryPwd()">
+      <div class="pwd-err" id="pwdErr"></div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="closePwd()">取消</button>
+        <button class="btn btn-main" onclick="tryPwd()">🔓 解锁</button>
+      </div>
+      <p style="margin-top:10px">💡 默认密码：<b>1234</b>（解锁后可在页面设置中修改）</p>
+    </div>
+  </div>
+
+  <!-- 页面设置弹窗（标题/副标题/背景/密码） -->
+  <div class="modal-mask" id="pageMask">
+    <div class="modal">
+      <h3>🎨 页面设置<button class="close-x" onclick="hideModal('pageMask')">✕</button></h3>
+      <div class="form-row"><label>顶部标题</label><input id="setTitle" maxlength="20"></div>
+      <div class="form-row"><label>副标题</label><input id="setSub" maxlength="30"></div>
+      <div class="form-row"><label>背景图片链接（留空则用默认奶油色）</label><input id="setBg" placeholder="https://... 图片地址"></div>
+      <div class="form-row"><button class="upload-btn" onclick="pickImageSet('setBg')">📷 从手机/电脑上传背景图</button></div>
+      <div class="btn-row"><button class="btn btn-danger" onclick="clearBg()">清空背景图</button></div>
+      <div class="form-row" style="margin-top:12px"><label>修改管理密码</label><input id="setPwd" maxlength="12" placeholder="输入新密码（留空不改）"></div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="hideModal('pageMask')">取消</button>
+        <button class="btn btn-main" onclick="savePageSetting()">💾 保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 菜品详情弹窗 -->
+  <div class="modal-mask" id="detailMask">
+    <div class="modal" id="detailBody"></div>
+  </div>
+
+  <!-- 菜品编辑弹窗 -->
+  <div class="modal-mask" id="dishMask">
+    <div class="modal">
+      <h3 id="dishEditTitle">✏️ 编辑菜品<button class="close-x" onclick="hideModal('dishMask')">✕</button></h3>
+      <div class="form-row"><label>菜名</label><input id="dName" maxlength="20"></div>
+      <div class="form-row"><label>分类</label><select id="dCat"></select></div>
+      <div class="form-row"><label>卡通图案（emoji 表情）</label><input id="dEmoji" maxlength="8" placeholder="🍗"></div>
+      <div class="form-row"><label>图片链接（填写后优先显示照片，留空用 emoji）</label><input id="dImg" placeholder="https://... 菜品照片地址"></div>
+      <div class="form-row"><button class="upload-btn" onclick="pickImageSet('dImg')">📷 从手机/电脑上传菜品照片</button></div>
+      <div class="form-row"><label>一句话介绍</label><input id="dDesc" maxlength="60"></div>
+      <div class="form-row"><label>辣度 🌶️</label>
+        <select id="dSpicy">
+          <option value="0">不辣</option><option value="1">微辣 🌶️</option>
+          <option value="2">中辣 🌶️🌶️</option><option value="3">重辣 🌶️🌶️🌶️</option>
+        </select>
+      </div>
+      <div class="form-row"><label>用料清单（每行一样）</label><textarea id="dIng" rows="5" placeholder="例：&#10;鸡翅 8个&#10;可乐 1罐&#10;生抽 2勺"></textarea></div>
+      <div class="form-row"><label>制作步骤（每行一步）</label><textarea id="dSteps" rows="5" placeholder="例：&#10;1. 鸡翅划刀焯水&#10;2. 煎至两面金黄&#10;3. 倒可乐焖15分钟收汁"></textarea></div>
+      <div class="btn-row" id="dishDelRow" style="display:none">
+        <button class="btn btn-danger" onclick="deleteDish()">🗑️ 删除这道菜</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="hideModal('dishMask')">取消</button>
+        <button class="btn btn-main" onclick="saveDish()">💾 保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 分类管理弹窗 -->
+  <div class="modal-mask" id="catMask">
+    <div class="modal">
+      <h3>🗂️ 分类管理<button class="close-x" onclick="hideModal('catMask')">✕</button></h3>
+      <div id="catManageList"></div>
+      <div class="form-row" style="margin-top:10px"><label>新增分类</label>
+        <div style="display:flex;gap:8px">
+          <input id="newCatIcon" maxlength="4" placeholder="图标emoji" style="flex:0 0 76px;text-align:center">
+          <input id="newCatName" maxlength="8" placeholder="分类名">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="hideModal('catMask')">完成</button>
+        <button class="btn btn-main" onclick="addCategory()">➕ 添加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 历史记录编辑弹窗 -->
+  <div class="modal-mask" id="histMask">
+    <div class="modal">
+      <h3>✏️ 编辑存档<button class="close-x" onclick="hideModal('histMask')">✕</button></h3>
+      <div class="form-row"><label>日期</label><input id="hDate" type="date"></div>
+      <div class="form-row"><label>菜品（可改数量、改菜名、删除）</label></div>
+      <div id="histEditList" style="max-height:46vh;overflow-y:auto"></div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="hideModal('histMask')">取消</button>
+        <button class="btn btn-main" onclick="saveHistEdit()">💾 保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 今日点菜编辑弹窗 -->
+  <div class="modal-mask" id="todayMask">
+    <div class="modal">
+      <h3>✏️ 编辑今日点菜<button class="close-x" onclick="hideModal('todayMask')">✕</button></h3>
+      <div id="todayEditList" style="max-height:48vh;overflow-y:auto"></div>
+      <div class="btn-row">
+        <button class="btn btn-plain" style="background:#FFE8E8;color:#D9534F;box-shadow:0 3px 0 rgba(200,60,60,.3)" onclick="todayClearAll()">🗑️ 一键清空</button>
+        <button class="btn btn-plain" onclick="hideModal('todayMask')">取消</button>
+        <button class="btn btn-main" onclick="saveTodayEdit()">💾 保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 同步设置弹窗 -->
+  <div class="modal-mask" id="syncMask">
+    <div class="modal">
+      <h3>☁️ 云端同步设置<button class="close-x" onclick="hideModal('syncMask')">✕</button></h3>
+      <div style="font-size:12px;color:#9B8B7A;line-height:1.7;margin-bottom:12px;padding:10px;background:#FFF8EE;border-radius:10px">
+        <b>什么是云端同步？</b><br>
+        客户点菜后，订单自动同步到云端服务器，店家实时收到通知。<br>
+        电脑关机也能用，任何网络都能同步。<br><br>
+        <b>如何获取同步地址？</b><br>
+        1. 店家访问 <a href="https://render.com" target="_blank" style="color:#E8635A">render.com</a> 注册免费账号<br>
+        2. 部署后端服务（详见部署说明）<br>
+        3. 获得形如 <code style="background:#f0f0f0;padding:2px 6px;border-radius:4px;font-size:11px">https://xxx.onrender.com</code> 的地址<br>
+        4. 将地址填入下方，所有设备填同样的地址
+      </div>
+      <div class="form-row">
+        <label>云端同步服务器地址</label>
+        <input id="syncUrlInput" type="url" placeholder="https://your-app.onrender.com" style="font-size:13px">
+      </div>
+      <div id="syncTestResult" style="font-size:12px;margin:8px 0;min-height:20px"></div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="hideModal('syncMask')">取消</button>
+        <button class="btn btn-main" onclick="testSyncUrl()">🔍 测试连接</button>
+        <button class="btn btn-main" onclick="saveSyncUrl()">💾 保存并启用</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PWA 安装提示条 -->
+<div class="pwa-install-bar" id="pwaInstallBar" style="display:none">
+  <img src="./icon-192.png" alt="icon">
+  <div style="flex:1;min-width:0">
+    <div style="font-weight:bold">安装「家常小厨房」</div>
+    <div style="font-size:11px;color:#9B8B7A">添加到主屏幕，像 App 一样使用</div>
+  </div>
+  <div class="btns">
+    <button class="install" id="pwaInstallBtn">安装</button>
+    <button class="close" id="pwaCloseBar">关闭</button>
+  </div>
+</div>
+
+<script>
+/* ================= 默认数据 ================= */
+const DEFAULT_DATA = {
+  title:'家常小厨房', sub:'今天想吃点什么呢？🍜', bgImage:'',
+  menu:[
+  { id:'hun', name:'荤菜', icon:'🍖', tag:'硬菜', dishes:[
+    { id:'h1', name:'可乐鸡翅', emoji:'🍗', img:'', desc:'甜甜的可乐酱汁裹着嫩滑鸡翅，小朋友的最爱！', price:28, spicy:0, tags:['人气'],
+      ing:['鸡翅 8个','可乐 1罐','生抽 2勺','姜片 3片'], steps:['鸡翅两面划刀，冷水下锅焯去血沫','少油煎至两面金黄','倒入可乐和生抽，中火焖15分钟','大火收汁至浓稠裹匀即可'] },
+    { id:'h2', name:'红烧肉', emoji:'🥩', img:'', desc:'肥而不腻，入口即化，配米饭绝了！', price:38, spicy:0, tags:['经典'],
+      ing:['五花肉 500g','冰糖 20g','八角 2个','生抽/老抽/料酒 适量'], steps:['五花肉切块焯水','小火炒冰糖至枣红色糖色','下肉块翻炒上色，加料和热水','小火炖40分钟后大火收汁'] },
+    { id:'h3', name:'糖醋排骨', emoji:'🍖', img:'', desc:'酸酸甜甜，色泽红亮，啃起来超过瘾。', price:36, spicy:0, tags:[],
+      ing:['排骨 500g','糖/醋/生抽/料酒','姜片 3片','熟芝麻 少许'], steps:['排骨焯水沥干','煎至表面微焦','按1料酒2生抽3糖4醋5水调汁倒入','焖20分钟收汁撒芝麻'] },
+    { id:'h4', name:'辣子鸡', emoji:'🌶️', img:'', desc:'干香麻辣，鸡块酥脆，越吃越上头！', price:42, spicy:3, tags:['重辣'],
+      ing:['鸡腿肉 400g','干辣椒 1碗','花椒 1把','姜蒜/熟芝麻 适量'], steps:['鸡肉切丁腌制15分钟','油炸至金黄酥脆捞出','煸香干辣椒和花椒','回锅翻炒，撒盐和芝麻'] },
+    { id:'h5', name:'清蒸鲈鱼', emoji:'🐟', img:'', desc:'鲜嫩清爽，浇上热油葱丝，鲜掉眉毛。', price:45, spicy:0, tags:['鲜美'],
+      ing:['鲈鱼 1条','葱丝/姜丝 适量','蒸鱼豉油 3勺','热油 2勺'], steps:['鱼身划刀，垫姜蒸8分钟','倒掉蒸出的汤汁，铺上葱丝','淋蒸鱼豉油，浇滚烫热油激香'] },
+    { id:'h6', name:'水煮牛肉', emoji:'🥘', img:'', desc:'麻辣鲜香，牛肉滑嫩，汤红油亮。', price:48, spicy:3, tags:['麻辣'],
+      ing:['牛肉 300g','豆芽/莴笋 适量','郫县豆瓣酱 2勺','干辣椒/花椒/淀粉 适量'], steps:['牛肉切片，加盐和淀粉上浆','炒豆瓣酱出红油，加水煮开烫熟配菜','滑入牛肉片煮至变色连汤倒入碗','撒干辣椒花椒，泼热油'] },
+    { id:'h7', name:'番茄牛腩', emoji:'🍅', img:'', desc:'牛腩炖得软烂，番茄浓郁，酸甜开胃。', price:40, spicy:0, tags:[],
+      ing:['牛腩 500g','番茄 3个','洋葱 半个','番茄酱 1勺'], steps:['牛腩焯水后炖1小时','番茄去皮炒出沙，加番茄酱','合炖30分钟，加盐调味'] },
+    { id:'h8', name:'宫保鸡丁', emoji:'🥜', img:'', desc:'鸡丁配花生米，糊辣荔枝口，下饭神器。', price:30, spicy:2, tags:[],
+      ing:['鸡胸肉 300g','熟花生米 1把','干辣椒/花椒 适量','葱姜蒜 适量'], steps:['鸡丁腌制，调好宫保汁','热锅滑炒鸡丁盛出','煸香辣椒花椒葱姜','回锅倒汁翻炒，撒花生米'] },
+  ]},
+  { id:'su', name:'素菜', icon:'🥬', tag:'清爽', dishes:[
+    { id:'s1', name:'麻婆豆腐', emoji:'🍲', img:'', desc:'嫩滑豆腐配肉末，麻辣烫嘴才够味！', price:18, spicy:2, tags:['下饭'],
+      ing:['嫩豆腐 1块','肉末 50g','郫县豆瓣酱 1勺','花椒粉/蒜苗 适量'], steps:['豆腐切块盐水焯一下','炒肉末和豆瓣酱','加水下豆腐炖5分钟','分次勾芡，撒花椒粉和蒜苗'] },
+    { id:'s2', name:'蒜蓉西兰花', emoji:'🥦', img:'', desc:'翠绿爽脆，蒜香浓郁，健康首选。', price:16, spicy:0, tags:['健康'],
+      ing:['西兰花 1颗','蒜末 1勺','蚝油 1勺','盐 适量'], steps:['西兰花掰小朵焯水1分钟','爆香蒜末','大火翻炒，加蚝油盐出锅'] },
+    { id:'s3', name:'地三鲜', emoji:'🥔', img:'', desc:'土豆茄子青椒，经典东北味，香糯下饭。', price:18, spicy:0, tags:[],
+      ing:['土豆 1个','茄子 1根','青椒 2个','蒜末/生抽 适量'], steps:['三样切块分别过油炸软','留底油爆香蒜末','调生抽糖汁，全部回锅翻匀'] },
+    { id:'s4', name:'干煸四季豆', emoji:'🫛', img:'', desc:'煸得干香入味，加点肉末更香。', price:18, spicy:1, tags:[],
+      ing:['四季豆 400g','肉末 50g','干辣椒 3个','蒜末 适量'], steps:['四季豆炸至表皮起皱','煸香肉末蒜和辣椒','回锅加盐翻炒均匀'] },
+    { id:'s5', name:'虎皮青椒', emoji:'🌶️', img:'', desc:'青椒煎出虎皮纹，微辣回甜，超级下饭。', price:15, spicy:1, tags:[],
+      ing:['青椒 5根','生抽 2勺','香醋 1勺','糖 1勺'], steps:['青椒拍扁去籽','少油慢煎至两面虎皮纹','淋调味汁，收干出锅'] },
+    { id:'s6', name:'番茄炒蛋', emoji:'🍳', img:'', desc:'国民家常菜，酸甜嫩滑，永远的神。', price:14, spicy:0, tags:['人气'],
+      ing:['番茄 2个','鸡蛋 3个','糖 1勺','盐 适量'], steps:['鸡蛋打散炒至凝固盛出','番茄炒出汁水','回锅加盐糖翻匀'] },
+    { id:'s7', name:'酸辣土豆丝', emoji:'🥔', img:'', desc:'根根分明，酸辣脆爽，爽口开胃。', price:13, spicy:2, tags:[],
+      ing:['土豆 2个','干辣椒 3个','花椒 少许','白醋 2勺'], steps:['土豆切丝冲去淀粉','花椒干辣椒爆香','大火快炒2分钟，淋醋加盐'] },
+    { id:'s8', name:'上汤娃娃菜', emoji:'🥬', img:'', desc:'汤汁鲜美，娃娃菜嫩甜，老人小孩都爱。', price:16, spicy:0, tags:[],
+      ing:['娃娃菜 2颗','皮蛋 1个','蒜 3瓣','高汤 2碗'], steps:['煸香蒜片和皮蛋丁','加高汤煮开','下娃娃菜煮软，加盐调味'] },
+  ]},
+  { id:'liang', name:'凉菜', icon:'🥗', tag:'开胃', dishes:[
+    { id:'l1', name:'凉拌黄瓜', emoji:'🥒', img:'', desc:'拍碎的黄瓜更入味，蒜香清脆，冰镇更好吃！', price:10, spicy:1, tags:['开胃'],
+      ing:['黄瓜 2根','蒜末 1勺','香油/醋/糖 适量'], steps:['黄瓜拍裂切段','加蒜和调料拌匀','冷藏15分钟更爽口'] },
+    { id:'l2', name:'口水鸡', emoji:'🐔', img:'', desc:'红油飘香，麻辣鲜香，让人流口水的凉菜。', price:28, spicy:3, tags:['麻辣'],
+      ing:['鸡腿 2个','红油 3勺','花椒油 1勺','花生碎/蒜末 适量'], steps:['鸡腿煮15分钟，冰水浸泡','去骨撕成条','淋红油料汁，撒花生碎'] },
+    { id:'l3', name:'皮蛋豆腐', emoji:'🥚', img:'', desc:'嫩豆腐配皮蛋，淋点香油生抽，简单美味。', price:12, spicy:0, tags:[],
+      ing:['内酯豆腐 1盒','皮蛋 2个','生抽/香油 适量','葱花 少许'], steps:['豆腐切块摆盘','皮蛋切瓣铺上','淋生抽香油撒葱花'] },
+    { id:'l4', name:'凉拌木耳', emoji:'🍄', img:'', desc:'爽脆木耳配香菜红椒，酸辣爽口。', price:12, spicy:1, tags:[],
+      ing:['干木耳 1把','香菜 2根','红椒 半个','蒜/醋/生抽 适量'], steps:['木耳泡发焯熟过凉','加香菜红椒和调料','拌匀即可'] },
+    { id:'l5', name:'糖拌西红柿', emoji:'🍅', img:'', desc:'冰镇西红柿撒白糖，餐前开胃小甜点。', price:10, spicy:0, tags:['解腻'],
+      ing:['西红柿 2个','白糖 2勺'], steps:['西红柿切月牙片','均匀撒糖','冷藏10分钟再吃'] },
+    { id:'l6', name:'夫妻肺片', emoji:'🥩', img:'', desc:'麻辣鲜香的经典川式凉菜，红油透亮。', price:32, spicy:3, tags:['新上'],
+      ing:['牛肉/牛杂 400g','卤水 1份','红油 3勺','花椒/花生碎 适量'], steps:['牛肉牛杂卤熟晾凉切片','淋红油卤水','撒花椒面和花生碎拌匀'] },
+  ]},
+  { id:'tang', name:'汤品', icon:'🍲', tag:'暖胃', dishes:[
+    { id:'t1', name:'番茄蛋花汤', emoji:'🥣', img:'', desc:'酸甜暖胃，饭前一碗汤，肠胃更舒服。', price:12, spicy:0, tags:['家常'],
+      ing:['番茄 1个','鸡蛋 1个','葱花 少许','香油 几滴'], steps:['番茄炒出汁加水煮开','转圈淋入蛋液','撒葱花，滴香油加盐'] },
+    { id:'t2', name:'玉米排骨汤', emoji:'🌽', img:'', desc:'清甜玉米炖排骨，汤色清亮，营养满满。', price:32, spicy:0, tags:['炖汤'],
+      ing:['排骨 400g','玉米 2根','胡萝卜 1根','姜 3片'], steps:['排骨焯水','全部食材入锅加足量水','小火炖1小时，加盐即可'] },
+    { id:'t3', name:'酸辣汤', emoji:'🍜', img:'', desc:'酸辣开胃，胡椒暖身，饭前来一碗超满足。', price:15, spicy:2, tags:[],
+      ing:['豆腐 半块','木耳 适量','鸡蛋 1个','白胡椒粉/醋 适量'], steps:['水开下豆腐木耳丝','水淀粉勾芡','淋蛋液，加胡椒和醋调味'] },
+    { id:'t4', name:'紫菜蛋花汤', emoji:'🌊', img:'', desc:'快手汤五分钟搞定，清淡鲜美。', price:10, spicy:0, tags:[],
+      ing:['紫菜 1小块','鸡蛋 1个','虾皮 1勺','香油 少许'], steps:['水开下紫菜和虾皮','转圈淋蛋液','滴香油撒盐出锅'] },
+    { id:'t5', name:'冬瓜丸子汤', emoji:'⚪', img:'', desc:'肉丸Q弹，冬瓜清爽，夏天喝特别舒服。', price:22, spicy:0, tags:[],
+      ing:['冬瓜 300g','猪肉馅 200g','姜葱/淀粉 适量'], steps:['肉馅加调料搅打上劲','水微开挤丸子下锅','丸子浮起下冬瓜片煮至透明'] },
+  ]},
+  { id:'zhu', name:'主食', icon:'🍚', tag:'管饱', dishes:[
+    { id:'z1', name:'蛋炒饭', emoji:'🍚', img:'', desc:'粒粒分明的黄金炒饭，加点葱花更香。', price:12, spicy:0, tags:['管饱'],
+      ing:['隔夜米饭 1碗','鸡蛋 2个','葱花 适量','盐 适量'], steps:['炒散鸡蛋盛出','下米饭炒散炒匀','回锅加盐和葱花'] },
+    { id:'z2', name:'葱油拌面', emoji:'🍜', img:'', desc:'葱油熬得喷香，面条劲道，简单又满足。', price:14, spicy:0, tags:['人气'],
+      ing:['面条 1份','小葱 1把','生抽/老抽/糖 适量'], steps:['小葱冷油小火熬至焦香','调好酱汁','面条煮好捞出拌匀'] },
+    { id:'z3', name:'水饺(猪肉白菜)', emoji:'🥟', img:'', desc:'皮薄馅大，一口一个，配醋更香。', price:20, spicy:0, tags:[],
+      ing:['猪肉馅 300g','白菜 半棵','饺子皮 1斤','葱姜水 适量'], steps:['肉馅分次加葱姜水搅打','白菜剁碎挤水拌入','包好，水开下饺煮至浮起'] },
+    { id:'z4', name:'酸辣粉', emoji:'🍥', img:'', desc:'粉条滑溜，酸辣过瘾，嗦一口太满足！', price:15, spicy:3, tags:['重辣'],
+      ing:['红薯粉 1份','花生/榨菜 适量','醋 2勺','辣椒油 2勺'], steps:['红薯粉泡软煮熟','碗底放醋蒜辣椒油','冲入热汤，下粉撒花生榨菜'] },
+    { id:'z5', name:'葱香花卷', emoji:'🥐', img:'', desc:'松软多层，葱香四溢，配粥配汤都好。', price:6, spicy:0, tags:[],
+      ing:['面粉 300g','酵母 3g','葱花 适量','油盐 少许'], steps:['和面发酵至两倍大','擀开抹油撒盐和葱花','卷起切段，蒸15分钟'] },
+  ]},
+  { id:'jieri', name:'节日特色', icon:'🎉', tag:'限定', dishes:[
+    { id:'j1', name:'团圆火锅', emoji:'🍲', img:'', desc:'除夕夜围炉守岁，一家人热热闹闹涮起来！', price:88, spicy:1, tags:['年夜饭'],
+      ing:['火锅底料 1块','牛羊肉卷 各1盘','丸子/蔬菜拼盘 适量'], steps:['高汤加底料煮开','先涮肉后涮菜','配蘸料开吃'] },
+    { id:'j2', name:'端午粽子', emoji:'🍙', img:'', desc:'糯米裹红枣，端午限定，软糯香甜。', price:8, spicy:0, tags:['端午'],
+      ing:['糯米 500g','红枣 适量','粽叶 1把'], steps:['糯米浸泡4小时','粽叶折斗，填米放枣','扎绳包紧，煮2小时'] },
+    { id:'j3', name:'中秋月饼', emoji:'🥮', img:'', desc:'蛋黄莲蓉经典口味，中秋赏月必备。', price:15, spicy:0, tags:['中秋'],
+      ing:['蛋黄莲蓉馅 适量','月饼预拌粉 300g','糖浆/油 适量'], steps:['饼皮和馅按3:7分剂','包馅搓圆压模','200度烤20分钟，回油2天'] },
+    { id:'j4', name:'长寿面', emoji:'🍝', img:'', desc:'生日来一碗，一根到底，健康长寿！', price:18, spicy:0, tags:['生日'],
+      ing:['面条 1份','鸡蛋 1个','青菜 2棵','葱花/生抽 适量'], steps:['煮面的同时卧个蛋','面条一根到底不咬断','摆蛋和青菜，浇汤撒葱'] },
+    { id:'j5', name:'元宵汤圆', emoji:'🫧', img:'', desc:'黑芝麻馅流心，正月十五团团圆圆。', price:10, spicy:0, tags:['元宵'],
+      ing:['糯米粉 300g','黑芝麻馅 适量'], steps:['温水揉糯米团','包入芝麻馅搓圆','水开下锅煮至浮起'] },
+  ]},
+  { id:'tianpin', name:'甜品饮品', icon:'🍮', tag:'饭后', dishes:[
+    { id:'d1', name:'杨枝甘露', emoji:'🥭', img:'', desc:'芒果西柚西米露，饭后清甜解腻。', price:15, spicy:0, tags:['新品'],
+      ing:['芒果 2个','西柚 半个','西米 50g','椰浆 1杯'], steps:['西米煮至透明过凉','一半芒果打泥一半切丁','混合椰浆果泥，加果肉冷藏'] },
+    { id:'d2', name:'红豆双皮奶', emoji:'🍮', img:'', desc:'奶香浓郁，红豆绵软，入口即化。', price:12, spicy:0, tags:[],
+      ing:['牛奶 400ml','蛋清 2个','蜜红豆 适量','糖 15g'], steps:['牛奶煮温倒入碗中晾出奶皮','奶皮下牛奶混蛋清过筛','回碗蒸12分钟，冷藏加红豆'] },
+    { id:'d3', name:'冰镇酸梅汤', emoji:'🧃', img:'', desc:'乌梅山楂熬制，生津解渴，解辣神器！', price:8, spicy:0, tags:['解辣'],
+      ing:['乌梅 30g','山楂 20g','陈皮/桂花 适量','冰糖 50g'], steps:['材料浸泡30分钟','加水煮40分钟','加冰糖溶化，冷藏后饮用'] },
+    { id:'d4', name:'绿豆沙', emoji:'🍨', img:'', desc:'夏日消暑必备，冰凉细腻的绿豆沙。', price:8, spicy:0, tags:[],
+      ing:['绿豆 100g','冰糖 40g','陈皮 1小片'], steps:['绿豆泡发2小时','煮至开花起沙','加冰糖，冷藏更佳'] },
+  ]},
+]};
+
+/* ================= 存取 ================= */
+const LS_DATA='homeMenuData', LS_PWD='homeMenuPwd', LS_HIST='homeMenuHistory';
+function loadData(){
+  try{ const s=localStorage.getItem(LS_DATA); if(s) return JSON.parse(s); }catch(e){}
+  return JSON.parse(JSON.stringify(DEFAULT_DATA));
+}
+let DB = loadData();
+function saveData(){
+  try{ localStorage.setItem(LS_DATA, JSON.stringify(DB)); }
+  catch(e){ showToast('⚠️ 图片太大存不下了，请换小一点的图片'); }
+  /* 店家保存时同步菜单到云端 */
+  if(isShop()) syncPushMenu();
+}
+let PWD = localStorage.getItem(LS_PWD) || '1234';
+function loadHist(){
+  try{
+    const s=localStorage.getItem(LS_HIST);
+    const arr = s?JSON.parse(s):[];
+    // 兼容旧记录：补 id / date / dateText，避免删除/编辑失效
+    arr.forEach(r=>{
+      if(!r.id) r.id='r'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+      if(!r.date && r.ts){ const d=new Date(r.ts); r.date=dateKey(d); r.dateText=fmtDate(d); }
+      if(!r.items) r.items=[];
+      if(!r.count) r.count=r.items.reduce((a,i)=>a+(i.qty||1),0);
+    });
+    return arr;
+  }catch(e){ return []; }
+}
+let HIST = loadHist();
+function saveHist(){
+  try{ localStorage.setItem(LS_HIST, JSON.stringify(HIST)); }
+  catch(e){ showToast('⚠️ 历史记录太多存不下了，可删除一些旧记录'); }
+}
+
+/* ================= 云端同步 ================= */
+/* API_BASE 动态检测：
+   - 本地 (localhost/LAN IP) → http://[hostname]:8088
+   - 云端部署 → 用户配置的 Render 服务器地址（存 localStorage）
+*/
+function getApiBase(){
+  const h = location.hostname;
+  /* 本地或局域网 → 用同源 + 端口 8088 */
+  if(h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0'){
+    return 'http://localhost:8088';
+  }
+  if(/^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h)){
+    return 'http://' + h + ':8088';
+  }
+  /* 云端部署 → 读取用户配置的同步服务器地址 */
+  const saved = localStorage.getItem('homeMenuSyncUrl') || '';
+  return saved;
+}
+let API_BASE = getApiBase();
+let syncEnabled = false;
+let lastOrderUpdate = 0;
+let lastMenuUpdate = 0;
+let lastSyncCount = 0;
+
+/* 初始化同步：尝试连接服务器，拉取共享数据 */
+async function syncInit(){
+  if(!API_BASE){
+    console.log('☁️ 未配置同步服务器（本地模式）');
+    return;
+  }
+  try{
+    const r = await fetch(API_BASE + '/api/state', { method:'GET' });
+    if(!r.ok) throw new Error('server error');
+    const data = await r.json();
+    syncEnabled = true;
+    /* 服务器有更新的菜单 → 用服务器的（客户也能看到店家最新菜单） */
+    const localMenuTs = parseInt(localStorage.getItem('homeMenuLastMenuSync')) || 0;
+    if(data.menu && data.lastMenuUpdate > localMenuTs){
+      DB = data.menu; saveData();
+      localStorage.setItem('homeMenuLastMenuSync', data.lastMenuUpdate);
+      renderHeader(); renderSidebar(); renderContent();
+      lastMenuUpdate = data.lastMenuUpdate;
+    }
+    /* 合并服务器上的订单到本地 */
+    if(data.orders && data.orders.length){
+      mergeServerOrders(data.orders);
+      lastOrderUpdate = data.lastOrderUpdate || 0;
+      lastSyncCount = data.orders.length;
+      renderOrder();
+      if(orderTab === 'history') renderHistory();
+    }
+    /* 店家：把本地菜单推上去（首次同步） */
+    if(isShop() && (!data.menu || data.lastMenuUpdate < localMenuTs)){
+      syncPushMenu();
+    }
+    /* 启动轮询 */
+    setInterval(syncPoll, 5000);
+    console.log('☁️ 云端同步已启用');
+  }catch(e){
+    console.log('☁️ 云端同步未启用（本地模式）');
+  }
+}
+
+/* 轮询：拉取新订单 + 检测菜单更新 */
+async function syncPoll(){
+  if(!syncEnabled) return;
+  try{
+    const r = await fetch(API_BASE + '/api/orders');
+    if(!r.ok) return;
+    const data = await r.json();
+    /* 有新订单 → 合并到本地 */
+    if(data.lastOrderUpdate > lastOrderUpdate){
+      const oldCount = lastSyncCount;
+      mergeServerOrders(data.orders);
+      lastOrderUpdate = data.lastOrderUpdate;
+      lastSyncCount = data.orders.length;
+      renderOrder();
+      if(orderTab === 'history') renderHistory();
+      /* 有新订单时提示店家 */
+      if(isShop() && data.orders.length > oldCount){
+        showToast('🔔 收到新的点菜订单！');
+      }
+    }
+    /* 菜单有更新 → 客户拉取最新菜单 */
+    if(data.lastMenuUpdate && data.lastMenuUpdate > lastMenuUpdate && !isShop()){
+      const sr = await fetch(API_BASE + '/api/state');
+      const sdata = await sr.json();
+      if(sdata.menu){
+        DB = sdata.menu; saveData();
+        lastMenuUpdate = data.lastMenuUpdate;
+        localStorage.setItem('homeMenuLastMenuSync', data.lastMenuUpdate);
+        renderHeader(); renderSidebar(); renderContent();
+      }
+    }
+  }catch(e){}
+}
+
+/* 合并服务器订单到本地 HIST（只添加本地没有的） */
+function mergeServerOrders(serverOrders){
+  const localIds = new Set(HIST.map(r=>r.id));
+  let added = false;
+  serverOrders.forEach(o=>{
+    if(!localIds.has(o.id)){
+      /* 兼容旧记录 */
+      if(!o.items) o.items = [];
+      if(!o.count) o.count = o.items.reduce((a,i)=>a+(i.qty||1),0);
+      HIST.push(o);
+      added = true;
+    }
+  });
+  if(added) saveHist();
+}
+
+/* 推送订单到服务器 */
+async function syncPushOrder(order){
+  if(!syncEnabled) return;
+  try{
+    await fetch(API_BASE + '/api/order', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ order })
+    });
+  }catch(e){}
+}
+
+/* 推送菜单到服务器（店家专用） */
+async function syncPushMenu(){
+  if(!syncEnabled || !isShop()) return;
+  try{
+    const r = await fetch(API_BASE + '/api/menu', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ menu: DB })
+    });
+    const data = await r.json();
+    if(data.lastMenuUpdate){
+      lastMenuUpdate = data.lastMenuUpdate;
+      localStorage.setItem('homeMenuLastMenuSync', data.lastMenuUpdate);
+    }
+  }catch(e){}
+}
+
+/* 从服务器删除订单 */
+async function syncDeleteOrder(id){
+  if(!syncEnabled) return;
+  try{
+    await fetch(API_BASE + '/api/orders/delete', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ id })
+    });
+  }catch(e){}
+}
+
+/* 从服务器按日期删除订单 */
+async function syncDeleteOrderByDate(date){
+  if(!syncEnabled) return;
+  try{
+    await fetch(API_BASE + '/api/orders/deleteByDate', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ date })
+    });
+  }catch(e){}
+}
+
+/* 更新服务器上的订单（编辑存档时用） */
+async function syncUpdateOrder(order){
+  if(!syncEnabled) return;
+  try{
+    await fetch(API_BASE + '/api/orders/update', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ order })
+    });
+  }catch(e){}
+}
+
+/* ---------- 图片上传（电脑/手机相册 → 压缩 → base64） ---------- */
+function pickImageSet(inputId){
+  const inp=document.createElement('input');
+  inp.type='file'; inp.accept='image/*';
+  inp.onchange=()=>{ const f=inp.files[0]; if(f) compressImage(f, inputId); };
+  inp.click();
+}
+function compressImage(file, inputId){
+  if(!/^image\//.test(file.type)){ showToast('请选择图片文件哦'); return; }
+  showToast('📷 正在处理图片…');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      const max=700;
+      let w=img.width, h=img.height;
+      const s=Math.min(1, max/Math.max(w,h));
+      w=Math.max(1,Math.round(w*s)); h=Math.max(1,Math.round(h*s));
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      const el=$(inputId);
+      el.dataset.img = c.toDataURL('image/jpeg',0.72);
+      el.value='（已上传图片 ✓ 保存后生效）';
+      el.style.color='#2E9E5B'; el.style.fontWeight='bold';
+      showToast('✅ 图片已载入，点保存生效');
+    };
+    img.onerror=()=>showToast('图片读取失败，换一张试试');
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+/* 取图片输入框的最终值：优先上传的图，其次链接 */
+function resolveImg(inputId){
+  const el=$(inputId);
+  if(el.dataset.img) return el.dataset.img;
+  return el.value.trim();
+}
+function resetImgInput(inputId, val){
+  const el=$(inputId);
+  el.dataset.img=''; el.value=val||'';
+  el.style.color=''; el.style.fontWeight='';
+}
+/* 生成历史记录用小缩略图（节省存储） */
+function makeThumb(dataUrl, cb){
+  if(!dataUrl) return cb('');
+  if(!dataUrl.startsWith('data:')) return cb(dataUrl);
+  const img=new Image();
+  img.onload=()=>{
+    const s=96/Math.max(img.width,img.height);
+    const c=document.createElement('canvas');
+    c.width=Math.max(1,Math.round(img.width*s)); c.height=Math.max(1,Math.round(img.height*s));
+    c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+    try{ cb(c.toDataURL('image/jpeg',0.6)); }catch(e){ cb(''); }
+  };
+  img.onerror=()=>cb('');
+  img.src=dataUrl;
+}
+
+/* ================= 状态 ================= */
+let unlocked = false;
+let curCat = DB.menu[0] ? DB.menu[0].id : '';
+let editingDishId = null;
+let today = loadToday();
+let orderTab = 'today';
+let mainTab = 'kitchen';
+let loginRole = 'customer'; /* 默认选客户 */
+
+/* ================= 用户系统 ================= */
+const LS_USER='homeMenuUser';
+function loadUser(){ try{ return JSON.parse(localStorage.getItem(LS_USER)); }catch(e){ return null; } }
+let USER = loadUser(); /* null=未登录, {role,nick,avatar} */
+function saveUser(){ localStorage.setItem(LS_USER, JSON.stringify(USER)); }
+function isShop(){ return USER && USER.role==='shop'; }
+function isCustomer(){ return USER && USER.role==='customer'; }
+
+const $ = id => document.getElementById(id);
+const findDish = id => { for(const c of DB.menu){ const d=(c.dishes||[]).find(x=>x.id===id); if(d) return d; } };
+const findCatOfDish = id => DB.menu.find(c=>(c.dishes||[]).some(x=>x.id===id));
+const uid = p => p + Math.random().toString(36).slice(2,8);
+const todayItem = key => today.find(x=>x.key===key);
+const totalQty = () => today.reduce((a,i)=>a+(i.qty||0),0);
+function loadToday(){
+  try{
+    const d = localStorage.getItem('homeMenuTodayDate');
+    if(d && d!==dateKey(new Date())) return []; // 跨天自动清空，只保留今天
+    return JSON.parse(localStorage.getItem('homeMenuToday'))||[];
+  }catch(e){ return []; }
+}
+function saveToday(){
+  try{
+    localStorage.setItem('homeMenuToday', JSON.stringify(today));
+    localStorage.setItem('homeMenuTodayDate', dateKey(new Date()));
+  }catch(e){}
+}
+const spicyHTML = n => n>0 ? `<span class="spicy">${'🌶️'.repeat(n)}</span>` : '';
+const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const imgHTML = d => d.img ? `<img src="${esc(d.img)}" onerror="this.remove()">` : d.emoji;
+
+/* ================= 渲染 ================= */
+function renderHeader(){
+  $('hTitle').textContent = DB.title || '家常小厨房';
+  $('hSub').textContent = DB.sub || '';
+  const ph = $('phone');
+  if(DB.bgImage){ ph.style.backgroundImage=`url("${DB.bgImage}")`; ph.classList.add('has-bg'); }
+  else { ph.style.backgroundImage=''; ph.classList.remove('has-bg'); }
+}
+
+function renderSidebar(){
+  let html = DB.menu.map(c=>`
+    <div class="cat-item ${c.id===curCat?'active':''}" onclick="selectCat('${c.id}')">
+      <span class="icon">${esc(c.icon||'🍽️')}</span>${esc(c.name)}
+    </div>`).join('');
+  html += `<div class="side-divider"></div>`;
+  if(!unlocked){
+    if(isShop()){
+      html += `<div class="side-tool" onclick="openPwd()"><span class="icon">🔒</span>编辑</div>`;
+    }else if(isCustomer()){
+      html += `<div class="side-tool" style="opacity:.5;cursor:not-allowed" onclick="showToast('只有店家才能编辑哦～')"><span class="icon">🔒</span>编辑</div>`;
+    }else{
+      html += `<div class="side-tool" onclick="openPwd()"><span class="icon">🔒</span>编辑</div>`;
+    }
+  }else{
+    html += `<div class="side-tool" style="color:#E8635A;font-weight:bold" onclick="lockEdit()"><span class="icon">🔓</span>退出编辑</div>
+    <div class="side-tool" onclick="openPageSetting()"><span class="icon">🎨</span>页面设置</div>
+    <div class="side-tool" onclick="openCatManage()"><span class="icon">🗂️</span>分类管理</div>`;
+  }
+  $('sidebar').innerHTML = html;
+}
+
+function renderContent(){
+  if(!USER){
+    $('content').innerHTML = `<div class="order-empty" style="padding:60px 20px"><span class="big">🔒</span>请先登录后再点菜哦～<br><button class="btn btn-main" style="margin-top:14px" onclick="switchTab('profile')">去登录</button></div>`;
+    return;
+  }
+  const cat = DB.menu.find(c=>c.id===curCat);
+  if(!cat){ $('content').innerHTML=''; return; }
+  let html = `<div class="cat-title">${esc(cat.icon||'')} ${esc(cat.name)}<span class="tag">${esc(cat.tag||'')}</span></div>`;
+  if(!(cat.dishes||[]).length){
+    html += `<div class="empty-cat">🙈 这个分类还没有菜哦<br>${unlocked?'点下面按钮添加新菜吧～':'等主人来添加新菜吧～'}</div>`;
+  }
+  if(unlocked){
+    html += `<div class="add-dish-bar" onclick="openDishEditor(null)">➕ 添加一道新菜</div>`;
+  }
+  html += (cat.dishes||[]).map(d=>{
+    const q = (todayItem(d.id)||{}).qty||0;
+    const tagHTML = (d.tags||[]).map(t=>
+      `<span class="tag-mini ${t==='新上'||t==='新品'?'new':''} ${t==='重辣'||t==='麻辣'?'hot':''}">${esc(t)}</span>`).join('');
+    return `
+    <div class="dish-card" onclick="openDetail('${d.id}')">
+      <div class="dish-img">${d.img?'':'<span class="steam">💨</span>'}${imgHTML(d)}</div>
+      <div class="dish-info">
+        <div class="dish-name">${esc(d.name)}</div>
+        <div class="dish-desc">${esc(d.desc)}</div>
+        <div class="dish-meta">
+          ${spicyHTML(d.spicy)}
+          ${tagHTML}
+        </div>
+      </div>
+      ${unlocked?`<div class="edit-btns">
+        <button class="mini-btn mb-edit" onclick="event.stopPropagation();openDishEditor('${d.id}')">✏️</button>
+        <button class="mini-btn mb-del" onclick="event.stopPropagation();quickDelDish('${d.id}')">🗑️</button>
+      </div>`:''}
+      ${q===0
+        ? `<button class="add-btn" onclick="event.stopPropagation();addDish('${d.id}',this)">＋</button>`
+        : `<div class="qty-box show">
+             <button class="qty-btn qty-minus" onclick="event.stopPropagation();minusDish('${d.id}')">－</button>
+             <span class="qty-num">${q}</span>
+             <button class="qty-btn" style="background:#FF7E5F;color:#fff;box-shadow:0 2px 0 #E85A3A" onclick="event.stopPropagation();addDish('${d.id}',this)">＋</button>
+           </div>`}
+    </div>`;
+  }).join('');
+  $('content').innerHTML = html;
+  $('content').scrollTop = 0;
+}
+
+function renderOrder(){
+  const list = $('orderList');
+  if(!USER){
+    list.innerHTML = `<div class="order-empty" style="padding:60px 20px"><span class="big">🔒</span>请先登录后再查看订单～<br><button class="btn btn-main" style="margin-top:14px" onclick="switchTab('profile')">去登录</button></div>`;
+    $('orderFooter').style.display = 'none';
+    $('cartCount').textContent = 0;
+    $('tabDot').textContent = 0;
+    $('tabDot').classList.remove('show');
+    $('confirmBar').classList.remove('show');
+    return;
+  }
+  const todayK = dateKey(new Date());
+  const todayArch = HIST.filter(r=>r.date===todayK).sort((a,b)=>b.ts-a.ts);
+  const canEdit = isShop();
+  // —— 今日点菜 ——
+  let html = `<div class="today-head"><span>🧺 今日点菜 · ${fmtDate(new Date())}</span>${canEdit?`<button class="hist-del" style="background:#FFF0D9;color:#C98A2B" onclick="openTodayEditor()">✏️ 编辑</button>`:''}</div>`;
+  if(!today.length && !todayArch.length){
+    html += `<div class="order-empty"><span class="big">🍽️</span>还没有点菜哦～<br>去厨房逛逛，挑几道爱吃的吧！</div>`;
+  }else{
+    // 当前草稿（可加减）
+    if(today.length){
+      let cnt=0;
+      html += today.map(it=>{
+        cnt += it.qty;
+        return `
+        <div class="order-card">
+          <div class="o-img">${it.img?`<img src="${esc(it.img)}" onerror="this.remove()">`:esc(it.emoji||'🍽️')}</div>
+          <div class="o-info">
+            <div class="o-name">${esc(it.name)} ${spicyHTML(it.spicy)}</div>
+            <div class="o-price">已点 ${it.qty} 份</div>
+          </div>
+          <div class="o-ctrl">
+            <button class="qty-btn qty-minus" onclick="todayQty('${it.key}',-1)">－</button>
+            <span class="qty-num">${it.qty}</span>
+            <button class="qty-btn" style="background:#FF7E5F;color:#fff;box-shadow:0 2px 0 #E85A3A" onclick="todayQty('${it.key}',1)">＋</button>
+          </div>
+        </div>`;
+      }).join('');
+      $('orderDishCount').textContent = cnt;
+    }
+    // 今天已确认下单的记录
+    if(todayArch.length){
+      html += `<div style="margin:10px 2px 4px;font-size:12px;color:#9B8B7A;padding:6px 10px;background:#F0F8E8;border-radius:10px">✅ 今日已下单（${todayArch.length}单）</div>`;
+      todayArch.forEach(r=>{
+        const editBtns = canEdit ? `<span style="margin-left:auto;display:flex;gap:6px"><button class="hist-del" style="background:#FFF0D9;color:#C98A2B" onclick="event.stopPropagation();openHistEditor('${r.id}')">✏️</button><button class="hist-del" onclick="event.stopPropagation();deleteHistoryRecord('${r.id}')">🗑️</button></span>` : '';
+        const userInfo = r.user ? ` · 👤 ${esc(r.user.nick)}` : '';
+        html += `<div class="hist-date open" style="margin:0 0 8px">
+          <div class="hd-head"><span>🕐 ${fmtTime(r.ts)} · ${r.count}道${userInfo}</span>${editBtns}</div>
+          <div class="hist-body">${r.items.map(it=>`<div class="hist-row"><span class="hr-img">${it.img?`<img src="${esc(it.img)}" onerror="this.remove()">`:esc(it.emoji||'🍽️')}</span><span class="hr-name">${esc(it.name)}</span><span class="hr-qty">×${it.qty}</span></div>`).join('')}</div>
+        </div>`;
+      });
+    }
+  }
+  list.innerHTML = html;
+  $('orderFooter').style.display = (orderTab==='today' && today.length) ? 'flex' : 'none';
+  const n = totalQty();
+  $('cartCount').textContent = n;
+  $('tabDot').textContent = n;
+  $('tabDot').classList.toggle('show', n>0);
+  // 确认下单按钮：厨房页 + 已点菜时显示
+  $('confirmCnt').textContent = n;
+  $('confirmBar').classList.toggle('show', n>0 && mainTab==='kitchen');
+}
+
+function refreshAll(){ renderHeader(); renderSidebar(); renderContent(); renderOrder(); renderProfile(); }
+
+/* ================= 交互：点菜 ================= */
+function selectCat(id){ curCat=id; renderSidebar(); renderContent(); }
+
+function flyPlus(el, txt){
+  const r = el.getBoundingClientRect();
+  const f = document.createElement('div');
+  f.className='fly'; f.textContent=txt;
+  f.style.left=(r.left+r.width/2-10)+'px';
+  f.style.top=(r.top-10)+'px';
+  f.style.setProperty('--dx',(Math.random()*40-20)+'px');
+  document.body.appendChild(f);
+  setTimeout(()=>f.remove(),800);
+}
+function addDish(id, el){
+  const d = findDish(id);
+  let it = todayItem(id);
+  if(it){ it.qty++; }
+  else if(d){ today.push({ key:id, name:d.name, qty:1, emoji:d.emoji||'🍽️', img:d.img||'', spicy:d.spicy||0 }); }
+  if(el) flyPlus(el, d?d.emoji:'🍽️');
+  saveToday(); renderContent(); renderOrder();
+}
+function minusDish(id){ todayQty(id,-1); }
+function todayQty(key, delta){
+  const it = todayItem(key); if(!it) return;
+  it.qty += delta;
+  if(it.qty<=0) today = today.filter(x=>x.key!==key);
+  saveToday(); renderContent(); renderOrder();
+}
+function clearOrder(){
+  if(!totalQty()) return;
+  if(confirm('确定要清空今日点菜吗？')){
+    today = []; saveToday(); renderContent(); renderOrder();
+    showToast('已清空，重新点吧～');
+  }
+}
+
+/* ================= 订单历史（按年月日存档） ================= */
+const WEEK=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+function fmtDate(d){ return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 · ${WEEK[d.getDay()]}`; }
+function fmtTime(ts){ const d=new Date(ts); const p=n=>String(n).padStart(2,'0'); return `${p(d.getHours())}:${p(d.getMinutes())}`; }
+function dateKey(d){ const p=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`; }
+
+function switchOrderTab(tab){
+  orderTab = tab;
+  $('segToday').classList.toggle('active', tab==='today');
+  $('segHistory').classList.toggle('active', tab==='history');
+  $('orderList').classList.toggle('show', tab==='today');
+  $('historyList').classList.toggle('show', tab==='history');
+  if(tab==='history') renderHistory();
+  renderOrder();
+}
+
+function saveOrderRecord(silent){
+  if(!today.length){ if(!silent) showToast('还没点菜哦，先去点几道吧'); return; }
+  const now = new Date();
+  const items = today.map(it=>({ name:it.name, qty:it.qty, price:0, emoji:it.emoji||'🍽️', img:it.img||'' }));
+  const cnt = items.reduce((a,i)=>a+i.qty,0);
+  const finish = ()=>{
+    const record = {
+      id:'r'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      date:dateKey(now), dateText:fmtDate(now), ts:Date.now(),
+      items, total:0, count:cnt,
+      user: USER ? { nick:USER.nick, role:USER.role, avatar:USER.avatar||'' } : null
+    };
+    HIST.push(record);
+    saveHist();
+    /* 推送到云端，让店家也能看到 */
+    syncPushOrder(record);
+    today = []; saveToday();
+    renderContent(); renderOrder();
+    switchOrderTab('today');
+    if(!silent) showToast('📝 已存档到 '+fmtDate(now));
+  };
+  // 若有本地上传的大图，先转成小缩略图再存，节省空间
+  const pend = items.filter(i=>i.img && i.img.startsWith('data:'));
+  if(!pend.length) return finish();
+  let done=0;
+  pend.forEach(it=>makeThumb(it.img, t=>{ it.img=t; if(++done===pend.length) finish(); }));
+}
+
+function renderHistory(){
+  const box = $('historyList');
+  if(!HIST.length){
+    box.innerHTML = `<div class="hist-empty"><span class="big">📅</span>还没有历史记录哦～<br>点完菜后点「📝 存档」<br>以后就能按日期翻看啦！</div>`;
+    return;
+  }
+  const canEdit = isShop();
+  // 按日期分组，日期倒序（新→旧），同一天内按时间倒序
+  const groups = {};
+  HIST.forEach((r,i)=>{ (groups[r.date]=groups[r.date]||[]).push({r,i}); });
+  const keys = Object.keys(groups).sort((a,b)=>b.localeCompare(a));
+  box.innerHTML = keys.map(k=>{
+    const recs = groups[k].sort((a,b)=>b.r.ts-a.r.ts);
+    const rec = recs[0].r;
+    const cnt = recs.reduce((a,x)=>a+x.r.count,0);
+    const rows = recs.map(({r,i})=>{
+      const userInfo = r.user ? ` · 👤 ${esc(r.user.nick)}` : '';
+      const timeLabel = `🕐 ${fmtTime(r.ts)}${userInfo}`;
+      const editSingle = canEdit ? `<button class="hist-del" style="background:#FFF0D9;color:#C98A2B;border:none;border-radius:999px;font-size:11px;padding:4px 10px;cursor:pointer;font-family:inherit;margin-left:auto" onclick="event.stopPropagation();openHistEditor('${r.id}')">✏️</button><button class="hist-del" style="margin-left:6px" onclick="event.stopPropagation();deleteHistoryRecord('${r.id}')">🗑️</button>` : '';
+      return `
+      <div style="padding:2px 0 6px">
+        <div style="display:flex;align-items:center;font-size:11px;color:#C7A98D;margin:4px 0 2px"><span>${timeLabel}</span>${editSingle}</div>
+        ${r.items.map(it=>`
+          <div class="hist-row">
+            <span class="hr-img">${it.img?`<img src="${esc(it.img)}" onerror="this.remove()">`:esc(it.emoji)}</span>
+            <span class="hr-name">${esc(it.name)}</span>
+            <span class="hr-qty">×${it.qty}</span>
+          </div>`).join('')}
+      </div>`;}).join('');
+    const editBtns = canEdit ? `<span style="display:flex;gap:6px">
+      <button class="hist-del" style="background:#FFF0D9;color:#C98A2B" onclick="event.stopPropagation();openHistEditor('${rec.id}')">✏️ 编辑</button>
+      <button class="hist-del" onclick="deleteHistoryDate('${k}')">🗑️ 删除这天</button>
+    </span>` : '';
+    return `
+    <div class="hist-date open">
+      <div class="hd-head" onclick="this.parentElement.classList.toggle('open')">
+        📅 <span>${esc(rec.dateText||k)}</span>
+        <span class="cnt">共${cnt}道</span>
+        <span class="arrow">▶</span>
+      </div>
+      <div class="hist-body">${rows}</div>
+      <div class="hist-total">
+        <span>这一天吃了 ${cnt} 道菜 🎉</span>
+        ${editBtns}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function deleteHistoryDate(dateKeyStr){
+  if(!isShop()){ showToast('只有店家才能删除记录哦～'); return; }
+  const n = HIST.filter(r=>r.date===dateKeyStr).length;
+  if(!confirm(`确定删除 ${dateKeyStr} 的 ${n} 条存档记录吗？`)) return;
+  HIST = HIST.filter(r=>r.date!==dateKeyStr);
+  syncDeleteOrderByDate(dateKeyStr);
+  saveHist(); renderHistory(); renderOrder();
+  showToast('已删除该日记录');
+}
+function deleteHistoryRecord(rid){
+  if(!isShop()){ showToast('只有店家才能删除记录哦～'); return; }
+  const rec = HIST.find(r=>r.id===rid);
+  if(!rec) return;
+  if(!confirm(`确定删除 ${fmtTime(rec.ts)} 这一单（${rec.count}道菜）吗？`)) return;
+  HIST = HIST.filter(r=>r.id!==rid);
+  syncDeleteOrder(rid);
+  saveHist(); renderHistory(); renderOrder();
+  showToast('已删除这一单');
+}
+
+/* ================= 历史记录编辑 ================= */
+let histEditingId = null;
+function openHistEditor(rid){
+  if(!isShop()){ showToast('只有店家才能编辑记录哦～'); return; }
+  const rec = HIST.find(r=>r.id===rid);
+  if(!rec) return;
+  histEditingId = rid;
+  $('hDate').value = rec.date;
+  renderHistEditList(rec.items);
+  $('histMask').classList.add('show');
+}
+function renderHistEditList(items){
+  $('histEditList').innerHTML = items.map((it,idx)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px dashed #FFEFD8">
+      <span style="font-size:22px">${it.img?`<img src="${esc(it.img)}" style="width:28px;height:28px;border-radius:8px;object-fit:cover">`:esc(it.emoji||'🍽️')}</span>
+      <input value="${esc(it.name)}" oninput="histEditName(${idx},this.value)" style="flex:1;border:1px solid #FFE0C4;border-radius:8px;padding:6px 8px;font-size:13px;font-family:inherit">
+      <button class="qty-btn qty-minus" onclick="histEditQty(${idx},-1)">－</button>
+      <span class="qty-num">${it.qty}</span>
+      <button class="qty-btn" style="background:#FF7E5F;color:#fff;box-shadow:0 2px 0 #E85A3A" onclick="histEditQty(${idx},1)">＋</button>
+      <button class="hist-del" onclick="histRemoveItem(${idx})">🗑️</button>
+    </div>`).join('');
+}
+function histEditName(idx,val){
+  const rec=HIST.find(r=>r.id===histEditingId); if(rec){ rec.items[idx].name=val; }
+}
+function histEditQty(idx,delta){
+  const rec=HIST.find(r=>r.id===histEditingId); if(!rec) return;
+  rec.items[idx].qty = Math.max(1, rec.items[idx].qty+delta);
+  renderHistEditList(rec.items);
+}
+function histRemoveItem(idx){
+  const rec=HIST.find(r=>r.id===histEditingId); if(!rec) return;
+  rec.items.splice(idx,1);
+  renderHistEditList(rec.items);
+}
+function saveHistEdit(){
+  const rec=HIST.find(r=>r.id===histEditingId); if(!rec) return;
+  // 日期
+  const dv=$('hDate').value.trim();
+  if(dv){
+    const parts=dv.split('-').map(Number);
+    if(parts.length===3 && parts.every(n=>!isNaN(n))){
+      const dd=new Date(parts[0],parts[1]-1,parts[2]);
+      rec.date=dateKey(dd);
+      rec.dateText=fmtDate(dd);
+    }
+  }
+  // 清理空名 / 重算数量
+  rec.items=rec.items.filter(it=>(it.name||'').trim());
+  rec.items.forEach(it=>{ it.name=it.name.trim(); });
+  if(!rec.items.length){
+    HIST=HIST.filter(r=>r.id!==histEditingId);
+    saveHist(); hideModal('histMask'); renderHistory();
+    showToast('菜品清空，该存档已删除');
+    return;
+  }
+  rec.count=rec.items.reduce((a,i)=>a+i.qty,0);
+  rec.total=rec.items.reduce((a,i)=>a+(i.price||0)*i.qty,0);
+  syncUpdateOrder(rec);
+  saveHist(); hideModal('histMask'); renderHistory();
+  showToast('💾 存档已更新');
+}
+
+/* ================= 今日点菜编辑 ================= */
+let todayEditBuf = [];
+function openTodayEditor(){
+  if(!isShop()){ showToast('只有店家才能编辑订单哦～'); return; }
+  todayEditBuf = today.map(it=>({ ...it }));
+  renderTodayEditList();
+  $('todayMask').classList.add('show');
+}
+function renderTodayEditList(){
+  if(!todayEditBuf.length){
+    $('todayEditList').innerHTML = `<div style="text-align:center;color:#C7A98D;padding:24px">还没有点菜哦～</div>`;
+    return;
+  }
+  $('todayEditList').innerHTML = todayEditBuf.map((it,idx)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px dashed #FFEFD8">
+      <span style="font-size:22px">${it.img?`<img src="${esc(it.img)}" style="width:28px;height:28px;border-radius:8px;object-fit:cover">`:esc(it.emoji||'🍽️')}</span>
+      <span style="flex:1;font-size:13px;font-weight:bold;color:#5C4033">${esc(it.name)}</span>
+      <button class="qty-btn qty-minus" onclick="todayEditQty(${idx},-1)">－</button>
+      <span class="qty-num">${it.qty}</span>
+      <button class="qty-btn" style="background:#FF7E5F;color:#fff;box-shadow:0 2px 0 #E85A3A" onclick="todayEditQty(${idx},1)">＋</button>
+    </div>`).join('');
+}
+function todayEditQty(idx,delta){
+  todayEditBuf[idx].qty = Math.max(1, todayEditBuf[idx].qty+delta);
+  renderTodayEditList();
+}
+function todayClearAll(){
+  if(!todayEditBuf.length) return;
+  if(confirm('确定要清空今日所有点菜吗？')){
+    todayEditBuf = [];
+    today = []; saveToday();
+    hideModal('todayMask');
+    renderContent(); renderOrder();
+    showToast('已清空今日点菜');
+  }
+}
+function saveTodayEdit(){
+  today = todayEditBuf;
+  saveToday(); hideModal('todayMask');
+  renderContent(); renderOrder();
+  showToast('💾 今日点菜已更新');
+}
+
+/* ================= 用户系统：登录/个人页 ================= */
+function openLogin(){
+  loginRole = USER ? USER.role : 'customer';
+  selectRole(loginRole);
+  $('loginName').value = USER ? USER.nick : '';
+  $('loginPwd').value = '';
+  const prev = $('loginAvatarPrev');
+  if(USER && USER.avatar){
+    prev.innerHTML = `<img src="${esc(USER.avatar)}" style="width:100%;height:100%;object-fit:cover">`;
+  }else{
+    prev.innerHTML = '🧑';
+  }
+  $('loginMask').classList.add('show');
+}
+function selectRole(role){
+  loginRole = role;
+  $('roleShop').classList.toggle('selected', role==='shop');
+  $('roleCustomer').classList.toggle('selected', role==='customer');
+  $('loginShopPwd').style.display = role==='shop' ? 'block' : 'none';
+}
+function handleAvatarUpload(input, prevId){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const max=200, s=Math.min(1, max/Math.max(img.width,img.height));
+      const w=Math.max(1,Math.round(img.width*s)), h=Math.max(1,Math.round(img.height*s));
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      const dataUrl = c.toDataURL('image/jpeg',0.8);
+      const prev = $(prevId);
+      prev.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:cover">`;
+      prev.dataset.avatar = dataUrl;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function doLogin(){
+  const nick = $('loginName').value.trim() || (loginRole==='shop' ? '店家老板' : '吃货同学');
+  const avatar = $('loginAvatarPrev').dataset.avatar || '';
+  if(loginRole==='shop'){
+    const pwd = $('loginPwd').value.trim();
+    if(pwd !== PWD){
+      showToast('管理密码不对哦～');
+      return;
+    }
+  }
+  /* 如果之前是店家且解锁了，切换/登出时锁定 */
+  if(unlocked && USER && USER.role==='shop' && loginRole!=='shop'){
+    unlocked = false;
+    document.body.classList.remove('editing');
+  }
+  USER = { role:loginRole, nick, avatar, loginAt:Date.now() };
+  saveUser();
+  hideModal('loginMask');
+  renderProfile(); renderSidebar(); renderContent();
+  showToast(loginRole==='shop' ? '🏪 店家登录成功！' : '🧑 登录成功，开始点菜吧～');
+}
+function logout(){
+  if(!confirm('确定要退出登录吗？')) return;
+  if(unlocked){ unlocked=false; document.body.classList.remove('editing'); }
+  USER = null;
+  localStorage.removeItem(LS_USER);
+  renderProfile(); renderSidebar(); renderContent();
+  showToast('已退出登录');
+}
+function editProfile(){
+  openLogin();
+}
+
+/* ================= 同步设置 ================= */
+function openSyncSettings(){
+  const input = $('syncUrlInput');
+  if(!input) return;
+  /* 如果是本地访问，显示当前本地地址提示 */
+  const h = location.hostname;
+  const isLocal = (h === 'localhost' || h === '127.0.0.1' || /^192\.168\.|^10\.|^172\.(1[6-9]|2\d|3[01])\./.test(h));
+  input.value = localStorage.getItem('homeMenuSyncUrl') || '';
+  $('syncTestResult').innerHTML = isLocal
+    ? '<span style="color:#5FBF70">✅ 本地访问，已自动连接本地服务器</span>'
+    : (API_BASE ? '<span style="color:#5FBF70">当前同步地址：' + esc(API_BASE) + '</span>' : '<span style="color:#C7A98D">未配置同步地址，当前为本地模式</span>');
+  showModal('syncMask');
+}
+
+async function testSyncUrl(){
+  const url = ($('syncUrlInput').value || '').trim().replace(/\/+$/,'');
+  const result = $('syncTestResult');
+  if(!url){
+    result.innerHTML = '<span style="color:#D9534F">❌ 请输入服务器地址</span>';
+    return;
+  }
+  result.innerHTML = '<span style="color:#C7A98D">⏳ 正在测试连接...</span>';
+  try{
+    const r = await fetch(url + '/api/health', { method:'GET' });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    if(data.ok){
+      result.innerHTML = '<span style="color:#5FBF70">✅ 连接成功！服务器正常（' + data.orders + ' 条订单）</span>';
+    }else{
+      throw new Error('响应异常');
+    }
+  }catch(e){
+    result.innerHTML = '<span style="color:#D9534F">❌ 连接失败：' + esc(e.message) + '</span>';
+  }
+}
+
+function saveSyncUrl(){
+  const url = ($('syncUrlInput').value || '').trim().replace(/\/+$/,'');
+  if(url && !url.startsWith('http://') && !url.startsWith('https://')){
+    showToast('地址需以 http:// 或 https:// 开头');
+    return;
+  }
+  localStorage.setItem('homeMenuSyncUrl', url);
+  API_BASE = url || getApiBase();
+  hideModal('syncMask');
+  showToast(url ? '☁️ 同步地址已保存，正在重新连接...' : '已清除同步地址，切换为本地模式');
+  /* 重新初始化同步 */
+  syncEnabled = false;
+  if(url){
+    syncInit();
+  }
+  renderProfile();
+}
+function renderProfile(){
+  const box = $('profileContent');
+  if(!USER){
+    box.innerHTML = `
+      <div class="profile-card">
+        <div class="avatar-wrap" onclick="openLogin()"><span>🧑</span></div>
+        <div class="profile-name" style="color:#C7A98D">未登录</div>
+        <div class="profile-info">点击下方按钮登录 / 注册</div>
+        <button class="btn btn-main" style="margin-top:14px;width:100%" onclick="openLogin()">🙋 点击登录</button>
+      </div>
+      <div class="profile-actions">
+        <div class="profile-btn" onclick="openLogin()">
+          <span class="pb-icon">🏪</span><span>我是店家</span>
+          <span class="pb-desc">管理菜单 · 编辑菜品</span>
+        </div>
+        <div class="profile-btn" onclick="openLogin()">
+          <span class="pb-icon">🧑</span><span>我是客户</span>
+          <span class="pb-desc">浏览菜单 · 点菜下单</span>
+        </div>
+      </div>`;
+    return;
+  }
+  const roleText = USER.role==='shop' ? '🏪 店家' : '🧑 客户';
+  const roleClass = USER.role==='shop' ? 'shop' : 'customer';
+  const avatarHTML = USER.avatar
+    ? `<img src="${esc(USER.avatar)}">`
+    : `<span>${USER.role==='shop'?'🏪':'🧑'}</span>`;
+  let actions = '';
+  if(USER.role==='shop'){
+    actions = `
+      <div class="profile-btn" onclick="hideModal('loginMask');switchTab('kitchen');if(!unlocked)openPwd()">
+        <span class="pb-icon">🔒</span><span>进入编辑模式</span>
+        <span class="pb-desc">解锁后可编辑菜品</span>
+      </div>
+      <div class="profile-btn" onclick="switchTab('order');switchOrderTab('history')">
+        <span class="pb-icon">📋</span><span>查看所有订单</span>
+        <span class="pb-desc">接收到的点菜记录</span>
+      </div>
+      <div class="profile-btn" onclick="openPageSetting()">
+        <span class="pb-icon">🎨</span><span>页面设置</span>
+        <span class="pb-desc">标题 · 背景 · 密码</span>
+      </div>`;
+  }else{
+    actions = `
+      <div class="profile-btn" onclick="switchTab('kitchen')">
+        <span class="pb-icon">👨‍🍳</span><span>去点菜</span>
+        <span class="pb-desc">浏览菜单 · 加菜下单</span>
+      </div>
+      <div class="profile-btn" onclick="switchTab('order');switchOrderTab('history')">
+        <span class="pb-icon">📅</span><span>我的历史订单</span>
+        <span class="pb-desc">查看所有点菜记录</span>
+      </div>`;
+  }
+  box.innerHTML = `
+    <div class="profile-card">
+      <div class="avatar-wrap" onclick="editProfile()">
+        ${avatarHTML}
+        <div class="avatar-hint">换头像</div>
+      </div>
+      <div class="profile-name">${esc(USER.nick)}</div>
+      <div class="profile-role ${roleClass}">${roleText}</div>
+      <div class="profile-info">${USER.role==='shop' ? '管理菜单 · 编辑菜品 · 接收点菜' : '浏览菜单 · 点菜下单 · 查看历史'}</div>
+      <div style="font-size:11px;margin-top:6px;color:${syncEnabled?'#5FBF70':'#C7A98D'};cursor:pointer" onclick="openSyncSettings()">${syncEnabled?'☁️ 云端同步已连接':'📱 本地模式 · 点击配置同步'}</div>
+      <button class="btn btn-plain" style="margin-top:14px;width:100%" onclick="editProfile()">✏️ 修改昵称 / 头像</button>
+    </div>
+    <div class="profile-actions">
+      ${actions}
+      <div class="profile-btn" onclick="openSyncSettings()">
+        <span class="pb-icon">☁️</span><span>同步设置</span>
+        <span class="pb-desc">${syncEnabled?'已连接云端':'配置云端同步地址'}</span>
+      </div>
+      <div class="profile-btn danger" onclick="logout()">
+        <span class="pb-icon">🚪</span><span>退出登录</span>
+        <span class="pb-desc"></span>
+      </div>
+    </div>`;
+}
+
+function switchTab(tab){
+  // 未登录时只允许看「我的」
+  if(!USER && tab!=='profile'){
+    showToast('请先登录后再使用～');
+    tab = 'profile';
+  }
+  mainTab = tab;
+  const isOrder = tab==='order';
+  const isProfile = tab==='profile';
+  $('orderView').classList.toggle('show', isOrder);
+  $('profileView').classList.toggle('show', isProfile);
+  $('tabKitchen').classList.toggle('active', tab==='kitchen');
+  $('tabOrder').classList.toggle('active', isOrder);
+  $('tabProfile').classList.toggle('active', isProfile);
+  $('confirmBar').classList.toggle('show', tab==='kitchen' && totalQty()>0 && USER);
+  if(isProfile) renderProfile();
+  if(tab==='kitchen') renderContent();
+  if(isOrder) renderOrder();
+}
+
+/* ================= 确认下单 & 分享 ================= */
+let shareTextCache = '';
+function confirmOrder(){
+  if(!today.length){ showToast('还没点菜哦，先点几道吧'); return; }
+  const now = new Date();
+  let cnt=0, idx=0;
+  const lines = today.map(it=>{
+    cnt+=it.qty; idx++;
+    return `${idx}. ${it.name} ×${it.qty}${it.spicy>0?' '+'🌶️'.repeat(it.spicy):''}`;
+  }).join('\n');
+  shareTextCache = `【${DB.title||'家常小厨房'} · 今日下单】\n${fmtDate(now)}\n${USER?'点菜人：'+USER.nick+'\n':''}\n${lines}\n\n共 ${cnt} 道菜，开饭啦～🍽️`;
+  $('shareCard').innerHTML = `
+    <div style="text-align:center;font-size:15px;font-weight:bold;color:#C97B3D;margin-bottom:4px">🍚 ${esc(DB.title||'家常小厨房')} · 今日下单</div>
+    <div style="text-align:center;font-size:11px;color:#C7A98D;margin-bottom:2px">${fmtDate(now)}</div>
+    ${USER?`<div style="text-align:center;font-size:12px;color:#8A4B2D;margin-bottom:6px">👤 ${esc(USER.nick)}</div>`:''}
+    ${today.map(it=>`<div style="display:flex;align-items:center;gap:6px">✅ ${esc(it.name)}${it.spicy>0?` <span style="font-size:10px">${'🌶️'.repeat(it.spicy)}</span>`:''}<span style="margin-left:auto;color:#E8635A;font-weight:bold">×${it.qty}</span></div>`).join('')}
+    <div style="text-align:center;margin-top:8px;color:#C97B3D">共 ${cnt} 道菜，开饭啦～🍽️</div>
+    <div style="text-align:center;margin-top:6px;font-size:11px;color:#9BC58B">✅ 已自动存档 · 店家已收到订单</div>
+  `;
+  $('shareMask').classList.add('show');
+  // 自动存档：下单成功即归档，今日点菜清空
+  saveOrderRecord(true);
+}
+function copyShareText(){
+  const done=()=>showToast('📋 已复制，去粘贴给家人吧');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(shareTextCache).then(done).catch(()=>fallbackCopy(done));
+  }else fallbackCopy(done);
+}
+function fallbackCopy(done){
+  const ta=document.createElement('textarea');
+  ta.value=shareTextCache; ta.style.position='fixed'; ta.style.opacity='0';
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); done(); }catch(e){ showToast('复制失败，请手动截图分享'); }
+  ta.remove();
+}
+async function shareToOther(){
+  if(navigator.share){
+    try{
+      await navigator.share({ title:(DB.title||'家常小厨房')+' · 今日下单', text:shareTextCache });
+      showToast('分享成功～');
+    }catch(e){ /* 用户取消分享，不用提示 */ }
+  }else{
+    copyShareText();
+  }
+}
+
+let toastTimer;
+function showToast(msg){
+  const t=$('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),1500);
+}
+
+/* ================= 交互：密码 & 编辑模式 ================= */
+function openPwd(){
+  if(!USER){
+    showToast('请先到「我的」登录');
+    switchTab('profile');
+    setTimeout(openLogin,300);
+    return;
+  }
+  if(USER.role!=='shop'){
+    showToast('只有店家才能编辑哦～');
+    return;
+  }
+  $('pwdInput').value=''; $('pwdErr').textContent='';
+  $('pwdMask').classList.add('show');
+  setTimeout(()=>$('pwdInput').focus(),100);
+}
+function closePwd(){ $('pwdMask').classList.remove('show'); }
+function tryPwd(){
+  if($('pwdInput').value === PWD){
+    unlocked = true;
+    document.body.classList.add('editing');
+    closePwd();
+    renderSidebar(); renderContent();
+    showToast('🔓 解锁成功！点击 ✏️ 可编辑菜品');
+  }else{
+    $('pwdErr').textContent='密码不对哦，再试试～';
+    $('pwdInput').value='';
+  }
+}
+function lockEdit(){
+  unlocked = false;
+  document.body.classList.remove('editing');
+  renderSidebar(); renderContent();
+  showToast('🔒 已锁定编辑');
+}
+$('pwdMask').addEventListener('click',e=>{ if(e.target.id==='pwdMask') closePwd(); });
+
+function hideModal(id){ $(id).classList.remove('show'); }
+document.querySelectorAll('.modal-mask').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m && m.id!=='pwdMask') m.classList.remove('show'); });
+});
+
+/* ---------- 页面设置 ---------- */
+function openPageSetting(){
+  if(!unlocked) return;
+  $('setTitle').value = DB.title;
+  $('setSub').value = DB.sub;
+  resetImgInput('setBg', DB.bgImage||'');
+  $('setPwd').value = '';
+  $('pageMask').classList.add('show');
+}
+function clearBg(){ resetImgInput('setBg',''); showToast('保存后背景图将清空'); }
+function savePageSetting(){
+  DB.title = $('setTitle').value.trim() || '家常小厨房';
+  DB.sub = $('setSub').value.trim();
+  DB.bgImage = resolveImg('setBg');
+  const np = $('setPwd').value.trim();
+  if(np){ PWD = np; localStorage.setItem(LS_PWD, np); }
+  saveData(); renderHeader(); hideModal('pageMask');
+  showToast('💾 页面设置已保存');
+}
+
+/* ---------- 菜品详情 ---------- */
+function openDetail(id){
+  const d = findDish(id); if(!d) return;
+  const ingHTML = (d.ing&&d.ing.length)
+    ? `<ul>${d.ing.map(i=>`<li>🥢 ${esc(i)}</li>`).join('')}</ul>`
+    : `<div class="detail-none">暂未填写用料清单${unlocked?'，点 ✏️ 补充哦':''}</div>`;
+  const stepsHTML = (d.steps&&d.steps.length)
+    ? `<ol>${d.steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>`
+    : `<div class="detail-none">暂未填写制作步骤${unlocked?'，点 ✏️ 补充哦':''}</div>`;
+  $('detailBody').innerHTML = `
+    <h3>📖 菜品详情<button class="close-x" onclick="hideModal('detailMask')">✕</button></h3>
+    <div class="detail-img">${imgHTML(d)}</div>
+    <div class="detail-head">
+      <span class="detail-name">${esc(d.name)}</span>
+      ${spicyHTML(d.spicy)}
+    </div>
+    <div class="detail-desc">${esc(d.desc)}</div>
+    <div class="detail-sec">
+      <div class="sec-title">🛒 用料清单</div>${ingHTML}
+    </div>
+    <div class="detail-sec">
+      <div class="sec-title">👩‍🍳 制作步骤</div>${stepsHTML}
+    </div>
+    ${unlocked ? `<div class="btn-row"><button class="btn btn-main" onclick="hideModal('detailMask');openDishEditor('${d.id}')">✏️ 编辑这道菜</button></div>`
+      : `<div class="btn-row"><button class="btn btn-main" onclick="hideModal('detailMask');addDish('${d.id}')">＋ 来一份</button></div>`}
+  `;
+  $('detailMask').classList.add('show');
+}
+
+/* ---------- 菜品编辑 ---------- */
+function openDishEditor(id){
+  if(!unlocked) return;
+  editingDishId = id;
+  $('dCat').innerHTML = DB.menu.map(c=>`<option value="${c.id}">${esc(c.icon||'')} ${esc(c.name)}</option>`).join('');
+  if(id){
+    const d = findDish(id);
+    $('dishEditTitle').innerHTML = `✏️ 编辑菜品<button class="close-x" onclick="hideModal('dishMask')">✕</button>`;
+    $('dName').value=d.name; $('dEmoji').value=d.emoji||'';
+    resetImgInput('dImg', d.img||'');
+    $('dDesc').value=d.desc||''; $('dSpicy').value=d.spicy||0;
+    $('dIng').value=(d.ing||[]).join('\n');
+    $('dSteps').value=(d.steps||[]).join('\n');
+    const cat=findCatOfDish(id); if(cat) $('dCat').value=cat.id;
+    $('dishDelRow').style.display='flex';
+  }else{
+    $('dishEditTitle').innerHTML = `➕ 添加新菜<button class="close-x" onclick="hideModal('dishMask')">✕</button>`;
+    $('dName').value=''; $('dEmoji').value='🍽️';
+    resetImgInput('dImg','');
+    $('dDesc').value=''; $('dSpicy').value='0';
+    $('dIng').value=''; $('dSteps').value='';
+    $('dCat').value = curCat;
+    $('dishDelRow').style.display='none';
+  }
+  $('dishMask').classList.add('show');
+}
+function saveDish(){
+  const name = $('dName').value.trim();
+  if(!name){ showToast('菜名不能为空哦'); return; }
+  const catId = $('dCat').value;
+  const cat = DB.menu.find(c=>c.id===catId);
+  if(!cat) return;
+  const data = {
+    name,
+    emoji: $('dEmoji').value.trim() || '🍽️',
+    img: resolveImg('dImg'),
+    desc: $('dDesc').value.trim(),
+    spicy: parseInt($('dSpicy').value)||0,
+    ing: $('dIng').value.split('\n').map(s=>s.trim()).filter(Boolean),
+    steps: $('dSteps').value.split('\n').map(s=>s.trim().replace(/^\d+[\.、\)]\s*/,'')).filter(Boolean),
+    tags: editingDishId ? (findDish(editingDishId).tags||[]) : [],
+  };
+  if(editingDishId){
+    Object.assign(findDish(editingDishId), data);
+    // 若换了分类
+    const oldCat = findCatOfDish(editingDishId);
+    if(oldCat.id !== catId){
+      oldCat.dishes = oldCat.dishes.filter(x=>x.id!==editingDishId);
+      cat.dishes.push(Object.assign(findDish(editingDishId)||{}, data, {id:editingDishId}));
+    }
+  }else{
+    data.id = uid('d');
+    cat.dishes = cat.dishes||[];
+    cat.dishes.push(data);
+    curCat = catId;
+  }
+  saveData();
+  hideModal('dishMask');
+  renderSidebar(); renderContent(); renderOrder();
+  showToast('💾 已保存');
+}
+function quickDelDish(id){
+  const d = findDish(id);
+  if(confirm(`确定删除「${d.name}」吗？`)){
+    DB.menu.forEach(c=>{ if(c.dishes) c.dishes = c.dishes.filter(x=>x.id!==id); });
+    today = today.filter(x=>x.key!==id); saveToday();
+    saveData(); renderContent(); renderOrder();
+    showToast('已删除');
+  }
+}
+function deleteDish(){
+  if(!editingDishId) return;
+  const d = findDish(editingDishId);
+  if(confirm(`确定删除「${d.name}」吗？删除后不可恢复！`)){
+    DB.menu.forEach(c=>{ if(c.dishes) c.dishes = c.dishes.filter(x=>x.id!==editingDishId); });
+    today = today.filter(x=>x.key!==editingDishId); saveToday();
+    editingDishId=null;
+    saveData(); hideModal('dishMask');
+    renderContent(); renderOrder();
+    showToast('已删除');
+  }
+}
+
+/* ---------- 分类管理 ---------- */
+function openCatManage(){
+  renderCatManage();
+  $('catMask').classList.add('show');
+}
+function renderCatManage(){
+  $('catManageList').innerHTML = DB.menu.map(c=>`
+    <div class="cat-manage-item">
+      <span class="cm-icon">${esc(c.icon||'')}</span>
+      <span class="cm-name">${esc(c.name)}</span>
+      <button class="cm-btn" onclick="renameCat('${c.id}')">✏️</button>
+      <button class="cm-btn" onclick="deleteCat('${c.id}')">🗑️</button>
+    </div>`).join('');
+}
+function renameCat(id){
+  const c = DB.menu.find(x=>x.id===id);
+  const name = prompt('修改分类名：', c.name);
+  if(name && name.trim()){ c.name = name.trim(); saveData(); renderCatManage(); renderSidebar(); renderContent(); }
+}
+function deleteCat(id){
+  const c = DB.menu.find(x=>x.id===id);
+  const n = (c.dishes||[]).length;
+  if(!confirm(`确定删除分类「${c.name}」吗？${n?`分类下的 ${n} 道菜也会一起删除！`:''}`)) return;
+  (c.dishes||[]).forEach(d=>{ today = today.filter(x=>x.key!==d.id); }); saveToday();
+  DB.menu = DB.menu.filter(x=>x.id!==id);
+  if(curCat===id) curCat = DB.menu[0] ? DB.menu[0].id : '';
+  saveData(); renderCatManage(); renderSidebar(); renderContent(); renderOrder();
+}
+function addCategory(){
+  const name = $('newCatName').value.trim();
+  const icon = $('newCatIcon').value.trim() || '🍽️';
+  if(!name){ showToast('分类名不能为空'); return; }
+  DB.menu.push({ id:uid('c'), name, icon, tag:'', dishes:[] });
+  saveData();
+  $('newCatName').value=''; $('newCatIcon').value='';
+  renderCatManage(); renderSidebar();
+  showToast('已添加分类「'+name+'」');
+}
+
+/* ================= PWA：安装提示 ================= */
+let deferredPrompt = null;
+function setupPWAInstall(){
+  const bar = $('pwaInstallBar');
+  const installBtn = $('pwaInstallBtn');
+  const closeBtn = $('pwaCloseBar');
+  if(!bar || !installBtn || !closeBtn) return;
+
+  // 已经以 standalone 模式运行则不显示
+  if(window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true){
+    return;
+  }
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    bar.style.display = 'flex';
+  });
+
+  installBtn.addEventListener('click', async () => {
+    if(!deferredPrompt){
+      showToast('iPhone 用户请用 Safari 的“分享→添加到主屏幕”');
+      return;
+    }
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if(outcome === 'accepted'){
+      showToast('正在安装，稍候到主屏幕查看～');
+      bar.classList.add('hide');
+      setTimeout(()=>bar.style.display='none', 300);
+    }
+    deferredPrompt = null;
+  });
+
+  closeBtn.addEventListener('click', () => {
+    bar.classList.add('hide');
+    setTimeout(()=>bar.style.display='none', 300);
+  });
+}
+setupPWAInstall();
+
+/* ================= PWA：注册 Service Worker ================= */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(reg => console.log('SW 注册成功', reg.scope))
+      .catch(err => console.log('SW 注册失败', err));
+  });
+}
+
+/* ================= 初始化 ================= */
+refreshAll();
+// 未登录时默认显示「我的」页面
+if(!USER){ switchTab('profile'); }
+else { switchTab('kitchen'); }
+// 启动云端同步
+syncInit();
+</script>
+</body>
+</html>
