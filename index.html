@@ -479,6 +479,13 @@
   .ver-banner .ver-arrow{ margin-left:auto; font-size:18px; }
   @keyframes verPulse{ 0%,100%{box-shadow:0 0 0 rgba(255,140,66,0)} 50%{box-shadow:0 2px 12px rgba(255,140,66,.4)} }
 
+  /* 下拉刷新指示条 */
+  .ptr{ height:0; overflow:hidden; display:flex; align-items:flex-end; justify-content:center; }
+  .ptr span{ display:flex; align-items:center; gap:6px; padding:8px 0; color:#C98A2B; font-size:12px; font-weight:bold; }
+  .ptr .ptr-ico{ display:inline-block; font-size:14px; }
+  .ptr.spin .ptr-ico{ animation:ptrSpin .9s linear infinite; }
+  @keyframes ptrSpin{ to{ transform:rotate(360deg); } }
+
   /* 登录弹窗 */
   .role-pick { display:flex; gap:12px; margin:10px 0; }
   .role-card {
@@ -1663,6 +1670,7 @@ function renderContent(){
     </div>`;
   }).join('');
   $('content').innerHTML = html;
+  makePTR($('content'), forceRefresh);
   $('content').scrollTop = 0;
 }
 
@@ -1670,6 +1678,7 @@ function renderOrder(){
   const list = $('orderList');
   if(!USER){
     list.innerHTML = `<div class="order-empty" style="padding:60px 20px"><span class="big">🔒</span>请先登录后再查看订单～<br><button class="btn btn-main" style="margin-top:14px" onclick="switchTab('profile')">去登录</button></div>`;
+    makePTR(list, forceRefresh);
     $('orderFooter').style.display = 'none';
     $('cartCount').textContent = 0;
     $('tabDot').textContent = 0;
@@ -1738,6 +1747,7 @@ function renderOrder(){
     }
   }
   list.innerHTML = html;
+  makePTR(list, forceRefresh);
   $('orderFooter').style.display = (orderTab==='today' && today.length) ? 'flex' : 'none';
   const n = totalQty();
   $('cartCount').textContent = n;
@@ -1749,6 +1759,70 @@ function renderOrder(){
 }
 
 function refreshAll(){ renderHeader(); renderSidebar(); renderContent(); renderOrder(); renderProfile(); }
+
+/* ================= 下拉刷新（厨房 / 订单） ================= */
+/* 立即从云端拉取最新菜单+订单 */
+async function forceRefresh(){
+  showToast('🔄 正在刷新...');
+  try{
+    if(syncEnabled){ await syncPoll(); }
+    showToast('✅ 已刷新为最新数据');
+  }catch(e){ showToast('❌ 刷新失败，稍后再试'); }
+}
+/* 给滚动容器挂下拉刷新（渲染会重写 innerHTML，所以每次渲染后重建指示条） */
+function makePTR(scroller, onRefresh){
+  if(!scroller) return;
+  /* 触摸逻辑只绑定一次 */
+  if(!scroller._ptrBound){
+    scroller._ptrBound = true;
+    let startY = 0, pulling = false;
+    scroller.addEventListener('touchstart', e => {
+      if(scroller.scrollTop <= 0){ startY = e.touches[0].clientY; pulling = true; scroller._ptrH = 0; }
+    }, { passive:true });
+    scroller.addEventListener('touchmove', e => {
+      if(!pulling || !scroller._ptrBar) return;
+      const dist = e.touches[0].clientY - startY;
+      if(dist > 0 && scroller.scrollTop <= 0){
+        const h = Math.min(dist * 0.4, 64);
+        scroller._ptrH = h;
+        scroller._ptrBar.style.height = h + 'px';
+        scroller._ptrBar.classList.remove('spin');
+        const ico = scroller._ptrBar.querySelector('.ptr-ico');
+        const txt = scroller._ptrBar.querySelector('.ptr-txt');
+        if(ico) ico.style.transform = 'rotate(' + (h >= 50 ? 180 : 0) + 'deg)';
+        if(txt) txt.textContent = h >= 50 ? '松手刷新' : '下拉刷新';
+      }
+    }, { passive:true });
+    scroller.addEventListener('touchend', () => {
+      if(!pulling) return;
+      pulling = false;
+      const h = scroller._ptrH || 0;
+      scroller._ptrH = 0;
+      if(!scroller._ptrBar) return;
+      if(h >= 50){
+        /* 刷新中：显示旋转动画，完成后收起 */
+        scroller._ptrBar.classList.add('spin');
+        scroller._ptrBar.style.height = '36px';
+        const txt = scroller._ptrBar.querySelector('.ptr-txt');
+        if(txt) txt.textContent = '刷新中...';
+        const bar = scroller._ptrBar;
+        Promise.resolve(onRefresh()).finally(() => {
+          setTimeout(() => { bar.style.height = '0px'; bar.classList.remove('spin'); }, 400);
+        });
+      }else{
+        scroller._ptrBar.style.height = '0px';
+      }
+    });
+  }
+  /* 指示条被 innerHTML 重写覆盖时重建 */
+  if(!scroller._ptrBar || !scroller.contains(scroller._ptrBar)){
+    const bar = document.createElement('div');
+    bar.className = 'ptr';
+    bar.innerHTML = '<span><span class="ptr-ico">🔄</span><b class="ptr-txt">下拉刷新</b></span>';
+    scroller.insertBefore(bar, scroller.firstChild);
+    scroller._ptrBar = bar;
+  }
+}
 
 /* ================= 交互：点菜 ================= */
 function selectCat(id){ curCat=id; renderSidebar(); renderContent(); }
@@ -1836,6 +1910,7 @@ function renderHistory(){
   const box = $('historyList');
   if(!HIST.length){
     box.innerHTML = `<div class="hist-empty"><span class="big">📅</span>还没有历史记录哦～<br>点完菜后点「📝 存档」<br>以后就能按日期翻看啦！</div>`;
+    makePTR(box, forceRefresh);
     return;
   }
   const canEdit = isShop();
@@ -1879,6 +1954,7 @@ function renderHistory(){
       </div>
     </div>`;
   }).join('');
+  makePTR(box, forceRefresh);
 }
 
 function deleteHistoryDate(dateKeyStr){
@@ -2228,9 +2304,9 @@ function renderProfile(){
     </div>
     <div class="profile-actions">
       ${actions}
-      <div class="profile-btn" onclick="newVersionReady ? applyUpdate() : checkForUpdate()">
+      <div class="profile-btn" onclick="checkForUpdate()">
         <span class="pb-icon">🔄</span><span>检查更新</span>
-        <span class="pb-desc" style="${newVersionReady?'color:#5FBF70;font-weight:bold':''}">${newVersionReady ? '🎉 新版本已就绪 · 点击更新' : '当前版本 ' + APP_VERSION}</span>
+        <span class="pb-desc">点击一键更新 · 当前版本 ${APP_VERSION}</span>
       </div>
       <div class="profile-btn" onclick="openSyncSettings()">
         <span class="pb-icon">☁️</span><span>同步设置</span>
@@ -2572,7 +2648,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v4.7';
+const APP_VERSION = 'v4.8';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
@@ -2608,46 +2684,45 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-/* 检查更新：拉取最新 sw.js，对比是否有新版本 */
+/* 检查更新：一键完成 —— 直接拉服务器 sw.js 对比版本，有新版立即清缓存+刷新 */
 async function checkForUpdate(){
   showToast('🔍 正在检查更新...');
-  if(!('serviceWorker' in navigator)){
-    showToast('当前环境不支持在线更新');
-    return;
-  }
   try{
-    const reg = swReg || await navigator.serviceWorker.register('./sw.js');
-    swReg = reg;
-    /* 主动向服务器查询新版 sw.js */
-    await reg.update();
-    /* 等待新 SW 完成安装 */
-    await new Promise(r=>setTimeout(r, 1000));
-    if(reg.waiting && navigator.serviceWorker.controller){
-      newVersionReady = true;
-      renderProfile();
-      showToast('🎉 发现新版本！点击「立即更新」完成升级');
-    }else{
+    /* 直接从服务器取 sw.js，加时间戳 + no-store 避开浏览器缓存 */
+    const res = await fetch('./sw.js?_t=' + Date.now(), { cache:'no-store' });
+    const txt = await res.text();
+    const m = txt.match(/APP_VERSION\s*=\s*['"]([^'"]+)['"]/);
+    const remoteVer = m ? m[1] : null;
+    if(!remoteVer){ showToast('❌ 无法获取版本信息'); return; }
+    if(remoteVer === APP_VERSION){
       newVersionReady = false;
       renderProfile();
-      $('verBanner').style.display = 'none';
+      const vb = $('verBanner'); if(vb) vb.style.display = 'none';
       showToast('✅ 已是最新版本 ' + APP_VERSION);
+      return;
     }
+    /* 有新版：一键直接更新 —— 清空所有缓存 + 注销旧 SW + 强制刷新页面 */
+    showToast('⏳ 发现新版本 ' + remoteVer + '，正在更新...');
+    try{
+      if('caches' in window){
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if('serviceWorker' in navigator){
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    }catch(e){}
+    /* 页面刷新后会自动重新注册新版 SW 并重新缓存 */
+    setTimeout(() => location.replace('./?_t=' + Date.now()), 600);
   }catch(e){
+    console.log('checkForUpdate error', e);
     showToast('❌ 检查更新失败，请稍后再试');
   }
 }
 
-/* 立即更新：让新版本接管并自动刷新 */
-function applyUpdate(){
-  if(swReg && swReg.waiting){
-    showToast('⏳ 正在更新，马上就好...');
-    swReg.waiting.postMessage({ type:'SKIP_WAITING' });
-    /* 兜底：3秒后仍未自动刷新则强制刷新 */
-    setTimeout(()=>{ if(!swRefreshing){ location.reload(); } }, 3000);
-  }else{
-    location.reload();
-  }
-}
+/* 立即更新（兼容旧入口：直接走一键更新流程） */
+function applyUpdate(){ checkForUpdate(); }
 
 /* ================= 初始化 ================= */
 refreshAll();
