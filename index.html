@@ -360,6 +360,13 @@
   .hist-row .hr-name{ flex:1; min-width:0; }
   .hist-row .hr-qty{ color:#B79A80; font-size:11px; }
   .hist-row .hr-sub{ color:#E8635A; font-weight:bold; }
+  .hist-item .hr-toggle{ font-size:11px; color:#C98A2B; background:#FFF0D9; border-radius:8px; padding:2px 8px; flex:0 0 auto; }
+  .hist-item.pack .hr-toggle{ opacity:.55; }
+  .hist-item.pack .hr-detail{ display:none; }
+  .hr-detail{ margin:0 0 8px 42px; padding:8px 10px; background:#FFF9F0; border-radius:10px; border:1px dashed #F0DFC5; font-size:12px; color:#8A7360; }
+  .hrd-title{ font-weight:bold; color:#C98A2B; margin:2px 0 3px; font-size:12px; }
+  .hrd-list{ margin:0 0 4px; padding-left:18px; line-height:1.75; }
+  .hrd-list li{ margin:0; }
   .hist-total{ display:flex; align-items:center; justify-content:space-between; padding:8px 12px; border-top:2px dashed #FFEFD8; font-size:13px; color:#C97B3D; font-weight:bold; }
   .hist-del{ background:#FFE3DE; color:#E8635A; border:none; border-radius:999px; font-size:11px; padding:4px 10px; cursor:pointer; font-family:inherit; }
   .hist-del:active{ transform:scale(.92); }
@@ -1168,6 +1175,8 @@ function isCustomer(){ return USER && USER.role==='customer'; }
 
 const $ = id => document.getElementById(id);
 const findDish = id => { for(const c of DB.menu){ const d=(c.dishes||[]).find(x=>x.id===id); if(d) return d; } };
+const findDishByName = name => { for(const c of DB.menu){ const d=(c.dishes||[]).find(x=>x.name===name); if(d) return d; } };
+const findDishForItem = it => (it.id && findDish(it.id)) || findDishByName(it.name);
 const findCatOfDish = id => DB.menu.find(c=>(c.dishes||[]).some(x=>x.id===id));
 const uid = p => p + Math.random().toString(36).slice(2,8);
 const todayItem = key => today.find(x=>x.key===key);
@@ -1314,7 +1323,25 @@ function renderOrder(){
         const userInfo = r.user ? ` · 👤 ${esc(r.user.nick)}` : '';
         html += `<div class="hist-date open" style="margin:0 0 8px">
           <div class="hd-head"><span>🕐 ${fmtTime(r.ts)} · ${r.count}道${userInfo}</span>${editBtns}</div>
-          <div class="hist-body">${r.items.map(it=>`<div class="hist-row"><span class="hr-img">${it.img?`<img src="${esc(it.img)}" onerror="this.remove()">`:esc(it.emoji||'🍽️')}</span><span class="hr-name">${esc(it.name)}</span><span class="hr-qty">×${it.qty}</span></div>`).join('')}</div>
+          <div class="hist-body">${r.items.map(it=>{
+            const d = findDishForItem(it);
+            const ing = (d&&d.ing&&d.ing.length) ? d.ing : null;
+            const steps = (d&&d.steps&&d.steps.length) ? d.steps : null;
+            const hasDetail = !!(ing||steps);
+            const detailHTML = hasDetail ? `<div class="hr-detail">
+              ${ing?`<div class="hrd-title">🛒 用料清单</div><ul class="hrd-list">${ing.map(i=>`<li>${esc(i)}</li>`).join('')}</ul>`:''}
+              ${steps?`<div class="hrd-title">👩‍🍳 制作步骤</div><ol class="hrd-list">${steps.map(s=>`<li>${esc(s)}</li>`).join('')}</ol>`:''}
+            </div>` : '';
+            return `<div class="hist-item">
+              <div class="hist-row"${hasDetail?` onclick="this.parentElement.classList.toggle('pack')" style="cursor:pointer"`:''}>
+                <span class="hr-img">${it.img?`<img src="${esc(it.img)}" onerror="this.remove()">`:esc(it.emoji||'🍽️')}</span>
+                <span class="hr-name">${esc(it.name)}</span>
+                ${hasDetail?`<span class="hr-toggle">📋 用料/步骤</span>`:''}
+                <span class="hr-qty">×${it.qty}</span>
+              </div>
+              ${detailHTML}
+            </div>`;
+          }).join('')}</div>
         </div>`;
       });
     }
@@ -1387,7 +1414,7 @@ function switchOrderTab(tab){
 function saveOrderRecord(silent){
   if(!today.length){ if(!silent) showToast('还没点菜哦，先去点几道吧'); return; }
   const now = new Date();
-  const items = today.map(it=>({ name:it.name, qty:it.qty, price:0, emoji:it.emoji||'🍽️', img:it.img||'' }));
+  const items = today.map(it=>({ id:it.key, name:it.name, qty:it.qty, price:0, emoji:it.emoji||'🍽️', img:it.img||'' }));
   const cnt = items.reduce((a,i)=>a+i.qty,0);
   const finish = ()=>{
     const record = {
@@ -2130,7 +2157,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v4.1';
+const APP_VERSION = 'v4.2';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
