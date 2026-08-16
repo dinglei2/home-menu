@@ -808,6 +808,18 @@
   </div>
 </div>
 
+<!-- 自定义确认弹窗（替代原生 confirm，兼容手机/PWA） -->
+<div class="modal-mask" id="confirmMask">
+  <div class="modal" style="max-width:300px">
+    <h3 id="confirmTitle" style="justify-content:center">确认操作</h3>
+    <p id="confirmMsg" style="font-size:14px;color:#7A6A58;text-align:center;margin:6px 4px 18px;line-height:1.6"></p>
+    <div class="btn-row">
+      <button class="btn btn-plain" id="confirmCancel">取消</button>
+      <button class="btn btn-danger" id="confirmOk">删除</button>
+    </div>
+  </div>
+</div>
+
 <!-- PWA 安装提示条 -->
 <div class="pwa-install-bar" id="pwaInstallBar" style="display:none">
   <img src="./icon-192.png" alt="icon">
@@ -1516,11 +1528,12 @@ function markAllReadNotices(){
 }
 function clearNotices(){
   if(!notices.length){ showToast('没有通知可清空'); return; }
-  if(!confirm('确定清空所有通知吗？')) return;
-  notices = [];
-  readNoticeIds = new Set();
-  saveReadIds(); refreshUnread(); renderNotices();
-  showToast('已清空通知');
+  confirmDialog('清空通知', '确定清空所有通知吗？', ()=>{
+    notices = [];
+    readNoticeIds = new Set();
+    saveReadIds(); refreshUnread(); renderNotices();
+    showToast('已清空通知');
+  }, '清空');
 }
 
 /* ---------- 图片上传（电脑/手机相册 → 压缩 → base64） ---------- */
@@ -1814,10 +1827,10 @@ function todayQty(key, delta){
 }
 function clearOrder(){
   if(!totalQty()) return;
-  if(confirm('确定要清空今日点菜吗？')){
+  confirmDialog('清空今日点菜', '确定要清空今日点菜吗？', ()=>{
     today = []; saveToday(); renderContent(); renderOrder();
     showToast('已清空，重新点吧～');
-  }
+  });
 }
 
 /* ================= 订单历史（按年月日存档） ================= */
@@ -1918,21 +1931,23 @@ function renderHistory(){
 function deleteHistoryDate(dateKeyStr){
   if(!isShop()){ showToast('只有店家才能删除记录哦～'); return; }
   const n = HIST.filter(r=>r.date===dateKeyStr).length;
-  if(!confirm(`确定删除 ${dateKeyStr} 的 ${n} 条存档记录吗？`)) return;
-  HIST = HIST.filter(r=>r.date!==dateKeyStr);
-  syncDeleteOrderByDate(dateKeyStr);
-  saveHist(); renderHistory(); renderOrder();
-  showToast('已删除该日记录');
+  confirmDialog('删除记录', `确定删除 ${dateKeyStr} 的 ${n} 条存档记录吗？`, ()=>{
+    HIST = HIST.filter(r=>r.date!==dateKeyStr);
+    syncDeleteOrderByDate(dateKeyStr);
+    saveHist(); renderHistory(); renderOrder();
+    showToast('已删除该日记录');
+  });
 }
 function deleteHistoryRecord(rid){
   if(!isShop()){ showToast('只有店家才能删除记录哦～'); return; }
   const rec = HIST.find(r=>r.id===rid);
   if(!rec) return;
-  if(!confirm(`确定删除 ${fmtTime(rec.ts)} 这一单（${rec.count}道菜）吗？`)) return;
-  HIST = HIST.filter(r=>r.id!==rid);
-  syncDeleteOrder(rid);
-  saveHist(); renderHistory(); renderOrder();
-  showToast('已删除这一单');
+  confirmDialog('删除记录', `确定删除 ${fmtTime(rec.ts)} 这一单（${rec.count}道菜）吗？`, ()=>{
+    HIST = HIST.filter(r=>r.id!==rid);
+    syncDeleteOrder(rid);
+    saveHist(); renderHistory(); renderOrder();
+    showToast('已删除这一单');
+  });
 }
 
 /* ================= 历史记录编辑 ================= */
@@ -2026,13 +2041,13 @@ function todayEditQty(idx,delta){
 }
 function todayClearAll(){
   if(!todayEditBuf.length) return;
-  if(confirm('确定要清空今日所有点菜吗？')){
+  confirmDialog('清空今日点菜', '确定要清空今日所有点菜吗？', ()=>{
     todayEditBuf = [];
     today = []; saveToday();
     hideModal('todayMask');
     renderContent(); renderOrder();
     showToast('已清空今日点菜');
-  }
+  });
 }
 function saveTodayEdit(){
   today = todayEditBuf;
@@ -2108,13 +2123,14 @@ function doLogin(){
   }
 }
 function logout(){
-  if(!confirm('确定要退出登录吗？')) return;
-  if(unlocked){ unlocked=false; document.body.classList.remove('editing'); }
-  USER = null;
-  localStorage.removeItem(LS_USER);
-  refreshUnread();
-  renderProfile(); renderSidebar(); renderContent();
-  showToast('已退出登录');
+  confirmDialog('退出登录', '确定要退出登录吗？', ()=>{
+    if(unlocked){ unlocked=false; document.body.classList.remove('editing'); }
+    USER = null;
+    localStorage.removeItem(LS_USER);
+    refreshUnread();
+    renderProfile(); renderSidebar(); renderContent();
+    showToast('已退出登录');
+  }, '退出');
 }
 function editProfile(){
   openLogin();
@@ -2393,6 +2409,28 @@ document.querySelectorAll('.modal-mask').forEach(m=>{
   m.addEventListener('click',e=>{ if(e.target===m && m.id!=='pwdMask') m.classList.remove('show'); });
 });
 
+/* 自定义确认弹窗：替代原生 confirm()，在手机/PWA 下更可靠 */
+let _confirmCb = null;
+function confirmDialog(title, msg, onYes, okText){
+  $('confirmTitle').textContent = title || '确认操作';
+  $('confirmMsg').textContent = msg || '';
+  $('confirmOk').textContent = okText || '删除';
+  _confirmCb = onYes;
+  $('confirmMask').classList.add('show');
+}
+$('confirmOk').addEventListener('click', ()=>{
+  $('confirmMask').classList.remove('show');
+  const cb = _confirmCb; _confirmCb = null;
+  if(cb) cb();
+});
+$('confirmCancel').addEventListener('click', ()=>{
+  $('confirmMask').classList.remove('show'); _confirmCb = null;
+});
+$('confirmMask').addEventListener('click', e=>{
+  if(e.target.id==='confirmMask'){ $('confirmMask').classList.remove('show'); _confirmCb = null; }
+});
+
+
 /* ---------- 页面设置 ---------- */
 function openPageSetting(){
   if(!unlocked) return;
@@ -2505,24 +2543,26 @@ function saveDish(){
 }
 function quickDelDish(id){
   const d = findDish(id);
-  if(confirm(`确定删除「${d.name}」吗？`)){
+  if(!d){ showToast('未找到这道菜'); return; }
+  confirmDialog('删除菜品', `确定删除「${d.name}」吗？`, ()=>{
     DB.menu.forEach(c=>{ if(c.dishes) c.dishes = c.dishes.filter(x=>x.id!==id); });
     today = today.filter(x=>x.key!==id); saveToday();
     saveData(); renderContent(); renderOrder();
     showToast('已删除');
-  }
+  });
 }
 function deleteDish(){
   if(!editingDishId) return;
   const d = findDish(editingDishId);
-  if(confirm(`确定删除「${d.name}」吗？删除后不可恢复！`)){
+  if(!d){ showToast('未找到这道菜'); return; }
+  confirmDialog('删除菜品', `确定删除「${d.name}」吗？删除后不可恢复！`, ()=>{
     DB.menu.forEach(c=>{ if(c.dishes) c.dishes = c.dishes.filter(x=>x.id!==editingDishId); });
     today = today.filter(x=>x.key!==editingDishId); saveToday();
     editingDishId=null;
     saveData(); hideModal('dishMask');
     renderContent(); renderOrder();
     showToast('已删除');
-  }
+  });
 }
 
 /* ---------- 分类管理 ---------- */
@@ -2546,12 +2586,14 @@ function renameCat(id){
 }
 function deleteCat(id){
   const c = DB.menu.find(x=>x.id===id);
+  if(!c){ showToast('未找到该分类'); return; }
   const n = (c.dishes||[]).length;
-  if(!confirm(`确定删除分类「${c.name}」吗？${n?`分类下的 ${n} 道菜也会一起删除！`:''}`)) return;
-  (c.dishes||[]).forEach(d=>{ today = today.filter(x=>x.key!==d.id); }); saveToday();
-  DB.menu = DB.menu.filter(x=>x.id!==id);
-  if(curCat===id) curCat = DB.menu[0] ? DB.menu[0].id : '';
-  saveData(); renderCatManage(); renderSidebar(); renderContent(); renderOrder();
+  confirmDialog('删除分类', `确定删除分类「${c.name}」吗？${n?`分类下的 ${n} 道菜也会一起删除！`:''}`, ()=>{
+    (c.dishes||[]).forEach(d=>{ today = today.filter(x=>x.key!==d.id); }); saveToday();
+    DB.menu = DB.menu.filter(x=>x.id!==id);
+    if(curCat===id) curCat = DB.menu[0] ? DB.menu[0].id : '';
+    saveData(); renderCatManage(); renderSidebar(); renderContent(); renderOrder();
+  });
 }
 function addCategory(){
   const name = $('newCatName').value.trim();
@@ -2606,7 +2648,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v5.0';
+const APP_VERSION = 'v5.1';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
