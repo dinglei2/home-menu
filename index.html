@@ -479,13 +479,6 @@
   .ver-banner .ver-arrow{ margin-left:auto; font-size:18px; }
   @keyframes verPulse{ 0%,100%{box-shadow:0 0 0 rgba(255,140,66,0)} 50%{box-shadow:0 2px 12px rgba(255,140,66,.4)} }
 
-  /* 下拉刷新指示条 */
-  .ptr{ height:0; overflow:hidden; display:flex; align-items:flex-end; justify-content:center; }
-  .ptr span{ display:flex; align-items:center; gap:6px; padding:8px 0; color:#C98A2B; font-size:12px; font-weight:bold; }
-  .ptr .ptr-ico{ display:inline-block; font-size:14px; }
-  .ptr.spin .ptr-ico{ animation:ptrSpin .9s linear infinite; }
-  @keyframes ptrSpin{ to{ transform:rotate(360deg); } }
-
   /* 登录弹窗 */
   .role-pick { display:flex; gap:12px; margin:10px 0; }
   .role-card {
@@ -1704,7 +1697,6 @@ function renderContent(){
     </div>`;
   }).join('');
   $('content').innerHTML = html;
-  makePTR($('content'), forceRefresh);
   $('content').scrollTop = 0;
 }
 
@@ -1712,7 +1704,6 @@ function renderOrder(){
   const list = $('orderList');
   if(!USER){
     list.innerHTML = `<div class="order-empty" style="padding:60px 20px"><span class="big">🔒</span>请先登录后再查看订单～<br><button class="btn btn-main" style="margin-top:14px" onclick="switchTab('profile')">去登录</button></div>`;
-    makePTR(list, forceRefresh);
     $('orderFooter').style.display = 'none';
     $('cartCount').textContent = 0;
     $('tabDot').textContent = 0;
@@ -1781,7 +1772,6 @@ function renderOrder(){
     }
   }
   list.innerHTML = html;
-  makePTR(list, forceRefresh);
   $('orderFooter').style.display = (orderTab==='today' && today.length) ? 'flex' : 'none';
   const n = totalQty();
   $('cartCount').textContent = n;
@@ -1793,70 +1783,6 @@ function renderOrder(){
 }
 
 function refreshAll(){ renderHeader(); renderSidebar(); renderContent(); renderOrder(); renderProfile(); }
-
-/* ================= 下拉刷新（厨房 / 订单） ================= */
-/* 立即从云端拉取最新菜单+订单 */
-async function forceRefresh(){
-  showToast('🔄 正在刷新...');
-  try{
-    if(syncEnabled){ await syncPoll(); }
-    showToast('✅ 已刷新为最新数据');
-  }catch(e){ showToast('❌ 刷新失败，稍后再试'); }
-}
-/* 给滚动容器挂下拉刷新（渲染会重写 innerHTML，所以每次渲染后重建指示条） */
-function makePTR(scroller, onRefresh){
-  if(!scroller) return;
-  /* 触摸逻辑只绑定一次 */
-  if(!scroller._ptrBound){
-    scroller._ptrBound = true;
-    let startY = 0, pulling = false;
-    scroller.addEventListener('touchstart', e => {
-      if(scroller.scrollTop <= 0){ startY = e.touches[0].clientY; pulling = true; scroller._ptrH = 0; }
-    }, { passive:true });
-    scroller.addEventListener('touchmove', e => {
-      if(!pulling || !scroller._ptrBar) return;
-      const dist = e.touches[0].clientY - startY;
-      if(dist > 0 && scroller.scrollTop <= 0){
-        const h = Math.min(dist * 0.4, 64);
-        scroller._ptrH = h;
-        scroller._ptrBar.style.height = h + 'px';
-        scroller._ptrBar.classList.remove('spin');
-        const ico = scroller._ptrBar.querySelector('.ptr-ico');
-        const txt = scroller._ptrBar.querySelector('.ptr-txt');
-        if(ico) ico.style.transform = 'rotate(' + (h >= 50 ? 180 : 0) + 'deg)';
-        if(txt) txt.textContent = h >= 50 ? '松手刷新' : '下拉刷新';
-      }
-    }, { passive:true });
-    scroller.addEventListener('touchend', () => {
-      if(!pulling) return;
-      pulling = false;
-      const h = scroller._ptrH || 0;
-      scroller._ptrH = 0;
-      if(!scroller._ptrBar) return;
-      if(h >= 50){
-        /* 刷新中：显示旋转动画，完成后收起 */
-        scroller._ptrBar.classList.add('spin');
-        scroller._ptrBar.style.height = '36px';
-        const txt = scroller._ptrBar.querySelector('.ptr-txt');
-        if(txt) txt.textContent = '刷新中...';
-        const bar = scroller._ptrBar;
-        Promise.resolve(onRefresh()).finally(() => {
-          setTimeout(() => { bar.style.height = '0px'; bar.classList.remove('spin'); }, 400);
-        });
-      }else{
-        scroller._ptrBar.style.height = '0px';
-      }
-    });
-  }
-  /* 指示条被 innerHTML 重写覆盖时重建 */
-  if(!scroller._ptrBar || !scroller.contains(scroller._ptrBar)){
-    const bar = document.createElement('div');
-    bar.className = 'ptr';
-    bar.innerHTML = '<span><span class="ptr-ico">🔄</span><b class="ptr-txt">下拉刷新</b></span>';
-    scroller.insertBefore(bar, scroller.firstChild);
-    scroller._ptrBar = bar;
-  }
-}
 
 /* ================= 交互：点菜 ================= */
 function selectCat(id){ curCat=id; renderSidebar(); renderContent(); }
@@ -1944,7 +1870,6 @@ function renderHistory(){
   const box = $('historyList');
   if(!HIST.length){
     box.innerHTML = `<div class="hist-empty"><span class="big">📅</span>还没有历史记录哦～<br>点完菜后点「📝 存档」<br>以后就能按日期翻看啦！</div>`;
-    makePTR(box, forceRefresh);
     return;
   }
   const canEdit = isShop();
@@ -1988,7 +1913,6 @@ function renderHistory(){
       </div>
     </div>`;
   }).join('');
-  makePTR(box, forceRefresh);
 }
 
 function deleteHistoryDate(dateKeyStr){
@@ -2682,7 +2606,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v4.9';
+const APP_VERSION = 'v5.0';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
