@@ -1119,17 +1119,25 @@ async function syncPoll(){
 
 /* 合并服务器订单到本地 HIST（只添加本地没有的） */
 function mergeServerOrders(serverOrders){
+  const serverIds = new Set(serverOrders.map(o=>o.id));
+  let changed = false;
+  /* 1. 添加服务器有但本地没有的订单 */
   const localIds = new Set(HIST.map(r=>r.id));
-  let added = false;
   serverOrders.forEach(o=>{
     if(!localIds.has(o.id)){
       if(!o.items) o.items = [];
       if(!o.count) o.count = o.items.reduce((a,i)=>a+(i.qty||1),0);
       HIST.push(o);
-      added = true;
+      changed = true;
     }
   });
-  if(added) saveHist();
+  /* 2. 删除本地有但服务器没有的订单（店家删除后同步给所有人） */
+  /*    保护：30秒内新建的订单不删（可能还没同步上去） */
+  const now = Date.now();
+  const before = HIST.length;
+  HIST = HIST.filter(r => serverIds.has(r.id) || (r.ts && (now - r.ts < 30000)));
+  if(HIST.length !== before) changed = true;
+  if(changed) saveHist();
 }
 
 /* 推送订单到云端（读-改-写） */
@@ -2532,7 +2540,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v4.5';
+const APP_VERSION = 'v4.6';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
