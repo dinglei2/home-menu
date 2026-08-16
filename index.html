@@ -941,8 +941,13 @@ let DB = loadData();
 function saveData(){
   try{ localStorage.setItem(LS_DATA, JSON.stringify(DB)); }
   catch(e){ showToast('⚠️ 图片太大存不下了，请换小一点的图片'); }
-  /* 店家保存时同步菜单到云端 */
-  if(isShop()) syncPushMenu();
+  /* 店家保存时：记录本地编辑时间戳 + 同步菜单到云端 */
+  if(isShop()){
+    if(!pullingRemote){
+      localStorage.setItem('homeMenuLocalEditTs', Date.now());
+      syncPushMenu();
+    }
+  }
 }
 let PWD = localStorage.getItem(LS_PWD) || '1234';
 function loadHist(){
@@ -977,6 +982,8 @@ function getUpstashUrl(){ return localStorage.getItem('homeMenuUpstashUrl') || U
 function getUpstashToken(){ return localStorage.getItem('homeMenuUpstashToken') || UPSTASH_DEFAULT_TOKEN; }
 
 let syncEnabled = false;
+let pullingRemote = false;   /* 正在用云端数据覆盖本地，此期间不回推 */
+let menuSyncPending = false; /* 店家编辑推送失败，待重试 */
 let lastOrderUpdate = 0;
 let lastMenuUpdate = 0;
 let lastSyncCount = 0;
@@ -1012,13 +1019,25 @@ async function syncInit(){
     const ordersData = results[1] ? JSON.parse(results[1]) : null;
     const noticeData = results[2] ? JSON.parse(results[2]) : null;
 
-    /* 服务器有更新的菜单 → 用服务器的（客户也能看到店家最新菜单） */
+    /* 菜单同步策略：比较云端时间戳 / 本地同步时间戳 / 店家本地编辑时间戳 */
     const localMenuTs = parseInt(localStorage.getItem('homeMenuLastMenuSync')) || 0;
-    if(menuData && menuData.lastMenuUpdate > localMenuTs){
-      DB = menuData.menu; saveData();
-      localStorage.setItem('homeMenuLastMenuSync', menuData.lastMenuUpdate);
+    const localEditTs = parseInt(localStorage.getItem('homeMenuLocalEditTs')) || 0;
+    const cloudMenuTs = menuData ? (menuData.lastMenuUpdate || 0) : 0;
+    lastMenuUpdate = Math.max(cloudMenuTs, localMenuTs, localEditTs);
+
+    if(isShop() && localEditTs > cloudMenuTs){
+      /* 店家本地有更新的编辑（含离线时保存的）→ 推到云端，覆盖旧云端 */
+      syncPushMenu();
+    }else if(cloudMenuTs > Math.max(localMenuTs, isShop()?localEditTs:0)){
+      /* 云端更新 → 拉取覆盖本地（此期间不回推，避免乒乓） */
+      pullingRemote = true;
+      DB = menuData.menu;
+      try{ localStorage.setItem(LS_DATA, JSON.stringify(DB)); }catch(e){}
+      localStorage.setItem('homeMenuLastMenuSync', cloudMenuTs);
+      localStorage.setItem('homeMenuLocalEditTs', cloudMenuTs);
       renderHeader(); renderSidebar(); renderContent();
-      lastMenuUpdate = menuData.lastMenuUpdate;
+      lastMenuUpdate = cloudMenuTs;
+      pullingRemote = false;
     }
 
     /* 合并服务器上的订单到本地 */
@@ -1028,11 +1047,6 @@ async function syncInit(){
       lastSyncCount = ordersData.orders.length;
       renderOrder();
       if(orderTab === 'history') renderHistory();
-    }
-
-    /* 店家：首次同步时把本地菜单推上去 */
-    if(isShop() && (!menuData || (menuData.lastMenuUpdate || 0) < localMenuTs)){
-      syncPushMenu();
     }
 
     /* 初始化通知列表（店家拉取历史通知，标记已读基线） */
@@ -1069,6 +1083,12 @@ async function syncInit(){
 /* 轮询：拉取新订单 + 检测菜单更新 */
 async function syncPoll(){
   if(!syncEnabled) return;
+  /* 上次店家编辑推送失败 → 网络恢复后自动补推 */
+  if(menuSyncPending && isShop()){
+    menuSyncPending = false;
+    await syncPushMenu();
+    if(menuSyncPending) return; /* 仍然失败，跳过本轮拉取，防止云端旧数据覆盖本地 */
+  }
   try{
     const results = await redisCmd('MGET', REDIS_KEY_MENU, REDIS_KEY_ORDERS, REDIS_KEY_NOTICES);
     const menuData = results[0] ? JSON.parse(results[0]) : null;
@@ -1093,11 +1113,18 @@ async function syncPoll(){
     }
 
     /* 菜单有更新 → 客户拉取最新菜单 */
-    if(menuData && menuData.lastMenuUpdate > lastMenuUpdate && !isShop()){
+    const cloudTs2 = menuData ? (menuData.lastMenuUpdate || 0) : 0;
+    const localEditTs2 = parseInt(localStorage.getItem('homeMenuLocalEditTs')) || 0;
+    /* 菜单有更新 → 拉取最新菜单（客户；店家其他设备的编辑也同步过来） */
+    if(menuData && cloudTs2 > lastMenuUpdate && cloudTs2 > localEditTs2){
+      pullingRemote = true;
       DB = menuData.menu; saveData();
-      lastMenuUpdate = menuData.lastMenuUpdate;
-      localStorage.setItem('homeMenuLastMenuSync', menuData.lastMenuUpdate);
+      lastMenuUpdate = cloudTs2;
+      localStorage.setItem('homeMenuLastMenuSync', cloudTs2);
+      localStorage.setItem('homeMenuLocalEditTs', cloudTs2);
       renderHeader(); renderSidebar(); renderContent();
+      if(!isShop()) showToast('🍽️ 菜单已更新');
+      pullingRemote = false;
     }
 
     /* 通知更新 → 接收新通知 */
@@ -1191,8 +1218,15 @@ async function syncPushMenu(){
     const data = { menu: DB, lastMenuUpdate: ts };
     await redisCmd('SET', REDIS_KEY_MENU, JSON.stringify(data));
     lastMenuUpdate = ts;
+    menuSyncPending = false;
     localStorage.setItem('homeMenuLastMenuSync', ts);
-  }catch(e){ console.log('syncPushMenu error:', e.message); }
+    localStorage.setItem('homeMenuLocalEditTs', ts);
+  }catch(e){
+    /* 推送失败：标记待重试，等下轮轮询自动补推 */
+    menuSyncPending = true;
+    console.log('syncPushMenu error:', e.message);
+    showToast('⚠️ 网络不佳，编辑已保存，稍后自动同步');
+  }
 }
 
 /* 从云端删除订单 */
@@ -2648,7 +2682,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v4.8';
+const APP_VERSION = 'v4.9';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
