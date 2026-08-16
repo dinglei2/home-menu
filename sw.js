@@ -1,5 +1,5 @@
-const CACHE_NAME = 'home-menu-v4';
-const APP_VERSION = 'v4.0';
+const CACHE_NAME = 'home-menu-v5';
+const APP_VERSION = 'v4.1';
 const ASSETS = [
   './',
   './index.html',
