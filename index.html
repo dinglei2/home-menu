@@ -449,6 +449,25 @@
   .profile-btn .pb-desc{ font-size:11px; color:#C7A98D; font-weight:normal; margin-left:auto; }
   .profile-btn.danger{ color:#D9534F; }
 
+  /* 通知徽标（我的tab上的红点已用 .tab .dot） */
+  .pb-badge {
+    background:#FF6B6B; color:#fff; border-radius:999px;
+    font-size:10px; font-weight:bold; min-width:18px; text-align:center;
+    padding:1px 6px; margin-left:auto;
+  }
+  /* 通知列表项 */
+  .notice-item{
+    background:#FFFBF5; border:2px solid #FFEFD8; border-radius:14px;
+    padding:10px 12px; margin-bottom:8px; cursor:pointer; transition:all .15s;
+  }
+  .notice-item.unread{ border-color:#FFD0A8; background:#FFF4E6; }
+  .notice-item:active{ transform:scale(.98); }
+  .ni-head{ display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+  .ni-time{ font-size:11px; color:#C7A98D; }
+  .ni-badge{ background:#FF6B6B; color:#fff; font-size:9px; border-radius:999px; padding:1px 6px; }
+  .ni-body{ font-size:13px; color:#5C4033; }
+  .ni-names{ font-size:12px; color:#9B8B7A; margin-top:2px; line-height:1.5; }
+
   /* 登录弹窗 */
   .role-pick { display:flex; gap:12px; margin:10px 0; }
   .role-card {
@@ -561,7 +580,7 @@
   <div class="tabbar">
     <div class="tab active" id="tabKitchen" onclick="switchTab('kitchen')"><span class="t-icon">👨‍🍳</span>厨房</div>
     <div class="tab" id="tabOrder" onclick="switchTab('order')" style="position:relative"><span class="t-icon">🧺</span>订单<span class="dot" id="tabDot">0</span></div>
-    <div class="tab" id="tabProfile" onclick="switchTab('profile')"><span class="t-icon">🙋</span>我的</div>
+    <div class="tab" id="tabProfile" onclick="switchTab('profile')" style="position:relative"><span class="t-icon">🙋</span>我的<span class="dot" id="tabNoticeDot">0</span></div>
   </div>
 
   <!-- 确认下单悬浮按钮（厨房页） -->
@@ -581,6 +600,18 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- 订单通知弹窗 -->
+  <div class="modal-mask" id="noticeMask">
+    <div class="modal">
+      <h3>🔔 订单通知<button class="close-x" onclick="hideModal('noticeMask')">✕</button></h3>
+      <div id="noticeList" style="max-height:60vh;overflow-y:auto;margin-bottom:6px"></div>
+      <div class="btn-row">
+        <button class="btn btn-plain" onclick="markAllReadNotices()">✅ 全部已读</button>
+        <button class="btn btn-plain" onclick="clearNotices()">🗑️ 清空通知</button>
+      </div>
+    </div>
+  </div>
 
   <!-- 登录/注册弹窗 -->
   <div class="modal-mask" id="loginMask">
@@ -914,6 +945,7 @@ const UPSTASH_DEFAULT_URL = 'https://striking-glowworm-130041.upstash.io';
 const UPSTASH_DEFAULT_TOKEN = 'gQAAAAAAAfv5AAIgcDJiNmNkYTk2YmU2YTc0YWFhOWM4YjY3OGM1MThjNjExZQ';
 const REDIS_KEY_MENU = 'homeMenu:menu';
 const REDIS_KEY_ORDERS = 'homeMenu:orders';
+const REDIS_KEY_NOTICES = 'homeMenu:notices';
 
 function getUpstashUrl(){ return localStorage.getItem('homeMenuUpstashUrl') || UPSTASH_DEFAULT_URL; }
 function getUpstashToken(){ return localStorage.getItem('homeMenuUpstashToken') || UPSTASH_DEFAULT_TOKEN; }
@@ -922,6 +954,11 @@ let syncEnabled = false;
 let lastOrderUpdate = 0;
 let lastMenuUpdate = 0;
 let lastSyncCount = 0;
+let lastNoticeUpdate = 0;
+/* 应用内通知：notices 本地缓存，readIds 已读 id 集合 */
+let notices = [];
+let readNoticeIds = new Set((JSON.parse(localStorage.getItem('homeMenuReadNotices')||'[]')));
+let unreadNoticeCount = 0;
 
 /* Upstash Redis REST API 调用 */
 async function redisCmd(...args){
@@ -941,10 +978,11 @@ async function redisCmd(...args){
 /* 初始化同步：连接 Upstash Redis，拉取共享数据 */
 async function syncInit(){
   try{
-    const results = await redisCmd('MGET', REDIS_KEY_MENU, REDIS_KEY_ORDERS);
+    const results = await redisCmd('MGET', REDIS_KEY_MENU, REDIS_KEY_ORDERS, REDIS_KEY_NOTICES);
     syncEnabled = true;
     const menuData = results[0] ? JSON.parse(results[0]) : null;
     const ordersData = results[1] ? JSON.parse(results[1]) : null;
+    const noticeData = results[2] ? JSON.parse(results[2]) : null;
 
     /* 服务器有更新的菜单 → 用服务器的（客户也能看到店家最新菜单） */
     const localMenuTs = parseInt(localStorage.getItem('homeMenuLastMenuSync')) || 0;
@@ -969,7 +1007,19 @@ async function syncInit(){
       syncPushMenu();
     }
 
-    /* 启动轮询（每5秒拉取新订单+菜单更新） */
+    /* 初始化通知列表（店家拉取历史通知，标记已读基线） */
+    if(noticeData && noticeData.list){
+      notices = noticeData.list;
+      lastNoticeUpdate = noticeData.lastUpdate || 0;
+      if(isShop()){
+        /* 首次同步：把已有通知都标记为已读，只对之后的新通知提醒 */
+        notices.forEach(n => readNoticeIds.add(n.id));
+        saveReadIds();
+      }
+      refreshUnread();
+    }
+
+    /* 启动轮询（每5秒拉取新订单+菜单更新+通知） */
     setInterval(syncPoll, 5000);
     console.log('☁️ 云端同步已启用（Upstash Redis 直连）');
   }catch(e){
@@ -981,9 +1031,10 @@ async function syncInit(){
 async function syncPoll(){
   if(!syncEnabled) return;
   try{
-    const results = await redisCmd('MGET', REDIS_KEY_MENU, REDIS_KEY_ORDERS);
+    const results = await redisCmd('MGET', REDIS_KEY_MENU, REDIS_KEY_ORDERS, REDIS_KEY_NOTICES);
     const menuData = results[0] ? JSON.parse(results[0]) : null;
     const ordersData = results[1] ? JSON.parse(results[1]) : null;
+    const noticeData = results[2] ? JSON.parse(results[2]) : null;
 
     /* 有新订单 → 合并到本地 */
     const serverOrderTs = ordersData ? (ordersData.lastOrderUpdate || 0) : 0;
@@ -1008,6 +1059,24 @@ async function syncPoll(){
       lastMenuUpdate = menuData.lastMenuUpdate;
       localStorage.setItem('homeMenuLastMenuSync', menuData.lastMenuUpdate);
       renderHeader(); renderSidebar(); renderContent();
+    }
+
+    /* 通知更新 → 店家接收新点菜通知 */
+    const serverNoticeTs = noticeData ? (noticeData.lastUpdate || 0) : 0;
+    if(serverNoticeTs > lastNoticeUpdate && noticeData && noticeData.list){
+      const newList = noticeData.list;
+      /* 找出本地没有的新通知 */
+      const localIds = new Set(notices.map(n=>n.id));
+      const fresh = newList.filter(n => !localIds.has(n.id));
+      notices = newList;
+      lastNoticeUpdate = serverNoticeTs;
+      if(isShop() && fresh.length){
+        /* 弹系统通知 */
+        fresh.forEach(n => fireSystemNotice(n));
+        refreshUnread();
+        renderProfile();
+        showToast('🔔 收到 ' + fresh.length + ' 条新订单通知');
+      }
     }
   }catch(e){}
 }
@@ -1097,6 +1166,144 @@ async function syncUpdateOrder(order){
     lastOrderUpdate = data.lastOrderUpdate;
     lastSyncCount = data.orders.length;
   }catch(e){}
+}
+
+/* ================= 订单通知 ================= */
+/* 客户下单时推送一条通知到云端，供店家接收 */
+async function syncPushNotice(record){
+  if(!syncEnabled) return;
+  try{
+    const result = await redisCmd('GET', REDIS_KEY_NOTICES);
+    const data = result ? JSON.parse(result) : { list: [], lastUpdate: 0 };
+    /* 通知内容：精简，只保留店家需要的信息 */
+    const notice = {
+      id: 'n' + record.id,
+      ts: record.ts,
+      orderId: record.id,
+      date: record.date,
+      dateText: record.dateText,
+      user: record.user || null,
+      count: record.count,
+      names: (record.items||[]).map(it=>it.name).slice(0, 8)
+    };
+    /* 只保留最近 100 条，防止无限增长 */
+    data.list.unshift(notice);
+    data.list = data.list.slice(0, 100);
+    data.lastUpdate = Date.now();
+    await redisCmd('SET', REDIS_KEY_NOTICES, JSON.stringify(data));
+    lastNoticeUpdate = data.lastUpdate;
+  }catch(e){ console.log('syncPushNotice error:', e.message); }
+}
+
+/* 浏览器系统通知：店家收到新订单时弹出 */
+function fireSystemNotice(n){
+  try{
+    if(!('Notification' in window)) return;
+    if(Notification.permission !== 'granted') return;
+    const who = (n.user && n.user.nick) ? n.user.nick : '客户';
+    const namesStr = (n.names||[]).slice(0,3).join('、') + (n.names && n.names.length>3 ? '…' : '');
+    const title = '🍚 ' + (DB.title||'家常小厨房') + ' · 新订单';
+    const body = `${who} 点了 ${n.count} 道菜${namesStr ? '\n' + namesStr : ''}`;
+    const notify = new Notification(title, {
+      body: body,
+      icon: 'icon-192.png',
+      tag: n.id,
+      requireInteraction: true
+    });
+    notify.onclick = function(){
+      window.focus();
+      switchTab('order');
+      notify.close();
+    };
+  }catch(e){}
+}
+
+/* 申请系统通知权限（店家专用） */
+function requestNoticePermission(){
+  if(!('Notification' in window)){
+    showToast('当前浏览器不支持通知');
+    return;
+  }
+  if(Notification.permission === 'granted'){
+    showToast('✅ 通知已开启');
+    return;
+  }
+  if(Notification.permission === 'denied'){
+    showToast('通知权限被拒绝，请在浏览器设置中开启');
+    return;
+  }
+  Notification.requestPermission().then(p => {
+    if(p === 'granted'){
+      showToast('✅ 订单通知已开启');
+      /* 立即弹一条测试通知 */
+      try{
+        new Notification('🍚 ' + (DB.title||'家常小厨房'), { body: '通知已开启，有新订单会提醒你', icon:'icon-192.png' });
+      }catch(e){}
+    } else {
+      showToast('未开启通知权限');
+    }
+  });
+}
+
+/* 刷新未读计数 + 徽标 */
+function refreshUnread(){
+  /* 仅店家显示通知徽标，客户不显示 */
+  unreadNoticeCount = isShop() ? notices.filter(n => !readNoticeIds.has(n.id)).length : 0;
+  const dot = $('tabNoticeDot');
+  if(dot){
+    dot.textContent = unreadNoticeCount;
+    dot.classList.toggle('show', unreadNoticeCount > 0);
+  }
+}
+function saveReadIds(){
+  localStorage.setItem('homeMenuReadNotices', JSON.stringify([...readNoticeIds]));
+}
+
+/* 打开通知列表 */
+function openNotices(){
+  /* 若权限未授予，引导开启系统通知 */
+  if('Notification' in window && Notification.permission === 'default'){
+    requestNoticePermission();
+  }
+  renderNotices();
+  $('noticeMask').classList.add('show');
+}
+function renderNotices(){
+  const box = $('noticeList');
+  if(!notices.length){
+    box.innerHTML = `<div style="text-align:center;padding:30px 10px;color:#C7A98D"><span style="font-size:32px">🔕</span><br>还没有通知<br><span style="font-size:11px">客户下单后会在这里提醒你</span></div>`;
+    return;
+  }
+  box.innerHTML = notices.map(n=>{
+    const unread = !readNoticeIds.has(n.id);
+    const who = (n.user && n.user.nick) ? n.user.nick : '客户';
+    const namesStr = (n.names||[]).join('、') || '—';
+    const time = fmtTime(n.ts);
+    return `<div class="notice-item ${unread?'unread':''}" onclick="markNoticeRead('${n.id}')">
+      <div class="ni-head">
+        <span class="ni-time">${time}</span>
+        ${unread?'<span class="ni-badge">新</span>':''}
+      </div>
+      <div class="ni-body"><b>${esc(who)}</b> 点了 <b>${n.count}</b> 道菜</div>
+      <div class="ni-names">${esc(namesStr)}</div>
+    </div>`;
+  }).join('');
+}
+function markNoticeRead(id){
+  readNoticeIds.add(id); saveReadIds(); refreshUnread(); renderNotices();
+}
+function markAllReadNotices(){
+  notices.forEach(n => readNoticeIds.add(n.id));
+  saveReadIds(); refreshUnread(); renderNotices();
+  showToast('已全部标记为已读');
+}
+function clearNotices(){
+  if(!notices.length){ showToast('没有通知可清空'); return; }
+  if(!confirm('确定清空所有通知吗？')) return;
+  notices = [];
+  readNoticeIds = new Set();
+  saveReadIds(); refreshUnread(); renderNotices();
+  showToast('已清空通知');
 }
 
 /* ---------- 图片上传（电脑/手机相册 → 压缩 → base64） ---------- */
@@ -1428,6 +1635,8 @@ function saveOrderRecord(silent){
     saveHist();
     /* 推送到云端，让店家也能看到 */
     syncPushOrder(record);
+    /* 推送订单通知，店家手机可收到提醒 */
+    syncPushNotice(record);
     today = []; saveToday();
     renderContent(); renderOrder();
     switchOrderTab('today');
@@ -1673,14 +1882,20 @@ function doLogin(){
   USER = { role:loginRole, nick, avatar, loginAt:Date.now() };
   saveUser();
   hideModal('loginMask');
+  refreshUnread();
   renderProfile(); renderSidebar(); renderContent();
   showToast(loginRole==='shop' ? '🏪 店家登录成功！' : '🧑 登录成功，开始点菜吧～');
+  /* 店家登录后引导开启系统通知 */
+  if(loginRole==='shop' && 'Notification' in window && Notification.permission==='default'){
+    setTimeout(()=>showToast('💡 去「我的」开启「📲 手机通知」，客户下单时能收到提醒'), 800);
+  }
 }
 function logout(){
   if(!confirm('确定要退出登录吗？')) return;
   if(unlocked){ unlocked=false; document.body.classList.remove('editing'); }
   USER = null;
   localStorage.removeItem(LS_USER);
+  refreshUnread();
   renderProfile(); renderSidebar(); renderContent();
   showToast('已退出登录');
 }
@@ -1777,6 +1992,14 @@ function renderProfile(){
   let actions = '';
   if(USER.role==='shop'){
     actions = `
+      <div class="profile-btn" onclick="openNotices()">
+        <span class="pb-icon">🔔</span><span>订单通知</span>
+        ${unreadNoticeCount>0?`<span class="pb-badge">${unreadNoticeCount}</span>`:'<span class="pb-desc">客户下单提醒</span>'}
+      </div>
+      <div class="profile-btn" onclick="requestNoticePermission()">
+        <span class="pb-icon">📲</span><span>开启手机通知</span>
+        <span class="pb-desc">${('Notification' in window && Notification.permission==='granted')?'✅ 已开启':'点击开启系统通知'}</span>
+      </div>
       <div class="profile-btn" onclick="hideModal('loginMask');switchTab('kitchen');if(!unlocked)openPwd()">
         <span class="pb-icon">🔒</span><span>进入编辑模式</span>
         <span class="pb-desc">解锁后可编辑菜品</span>
@@ -2158,7 +2381,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v4.3';
+const APP_VERSION = 'v4.4';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
