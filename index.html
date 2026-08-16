@@ -84,7 +84,8 @@
     flex:0 0 86px; overflow-y:auto;
     background:#FFF1DE;
     border-right:2px dashed #FFD9A8;
-    padding-bottom:10px;
+    /* 底部留出导航栏高度，避免最后几项被遮挡 */
+    padding-bottom:calc(88px + env(safe-area-inset-bottom));
     /* 关键：滚动到顶/底不回弹、不带动整页滚动 */
     overscroll-behavior:contain;
     overscroll-behavior-y:contain;
@@ -2157,7 +2158,7 @@ function setupPWAInstall(){
 setupPWAInstall();
 
 /* ================= PWA：注册 Service Worker + 应用更新 ================= */
-const APP_VERSION = 'v4.2';
+const APP_VERSION = 'v4.3';
 let swReg = null;          /* 当前 SW 注册对象 */
 let newVersionReady = false; /* 是否有新版本等待激活 */
 let swRefreshing = false;  /* 防止 controllerchange 重复刷新 */
