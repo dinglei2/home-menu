@@ -1227,10 +1227,9 @@ async function syncPushMenu(){
     localStorage.setItem('homeMenuLastMenuSync', ts);
     localStorage.setItem('homeMenuLocalEditTs', ts);
   }catch(e){
-    /* 推送失败：标记待重试，等下轮轮询自动补推 */
+    /* 推送失败：标记待重试，等下轮轮询自动补推（静默重试，不再弹 toast 避免频繁打扰） */
     menuSyncPending = true;
     console.log('syncPushMenu error:', e.message);
-    showToast('⚠️ 网络不佳，编辑已保存，稍后自动同步');
   }
 }
 
